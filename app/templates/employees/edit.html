@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block app_content %}
+<div class="row">
+    <div class="col-md-6 col-md-offset-3">
+        <h1>编辑员工信息</h1>
+        
+        <div class="panel panel-info">
+            <div class="panel-body">
+                <p><strong>员工工号:</strong> {{ employee.employee_id }}</p>
+                <p><strong>用户名:</strong> {{ employee.user.username }}</p>
+                <p><strong>邮箱:</strong> {{ employee.user.email }}</p>
+            </div>
+        </div>
+        
+        <form action="" method="post" novalidate>
+            {{ form.hidden_tag() }}
+            
+            <div class="form-group">
+                {{ form.name.label }}
+                {{ form.name(class="form-control", placeholder="请输入员工姓名") }}
+                {% for error in form.name.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="form-group">
+                {{ form.position.label }}
+                {{ form.position(class="form-control", placeholder="请输入职位") }}
+                {% for error in form.position.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="form-group">
+                {{ form.branch_id.label }}
+                {{ form.branch_id(class="form-control") }}
+                {% for error in form.branch_id.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <hr>
+            
+            <h3>更新密码（可选）</h3>
+            
+            <div class="form-group">
+                {{ form.new_password.label }}
+                {{ form.new_password(class="form-control", placeholder="请输入新密码") }}
+                {% for error in form.new_password.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+                <div class="help-block">留空表示不修改密码</div>
+            </div>
+            
+            <div class="alert alert-info">
+                <strong>注意事项：</strong>
+                <ul>
+                    <li>员工工号、用户名和邮箱不可修改</li>
+                    <li>如果需要修改密码，请输入新密码，长度至少为8个字符</li>
+                </ul>
+            </div>
+            
+            <div class="form-group text-center">
+                {{ form.submit(class="btn btn-primary btn-lg") }}
+                <a href="{{ url_for('employees.detail', employee_id=employee.id) }}" class="btn btn-default btn-lg">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

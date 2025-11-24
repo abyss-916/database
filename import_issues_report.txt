@@ -1,0 +1,82 @@
+# 项目导入语句问题报告
+
+## 1. datetime导入位置问题
+
+**问题描述**: 在多个模型文件中，datetime导入被放在了文件的开头，但在实际使用这些模型的文件中，可能会出现导入顺序问题。
+
+**受影响文件**:
+- d:\VS code\py_code\database\app\models\account.py
+- d:\VS code\py_code\database\app\models\customer.py
+- d:\VS code\py_code\database\app\models\user.py
+- d:\VS code\py_code\database\app\models\employee.py
+- d:\VS code\py_code\database\init_db.py
+
+**问题详情**:
+- 在这些文件中，datetime被导入但在类定义中立即使用datetime.utcnow()作为默认值
+- 这可能导致在某些导入顺序下出现NameError
+
+## 2. 模型导出不完整
+
+**问题描述**: models/__init__.py没有导出所有定义在各个模型文件中的类。
+
+**受影响文件**:
+- d:\VS code\py_code\database\app\models\__init__.py
+
+**缺失导出的类**:
+- Transaction (定义在account.py中)
+- Dependent (定义在employee.py中)
+
+## 3. 潜在的循环导入风险
+
+**问题描述**: 模型之间存在相互引用，可能导致循环导入。
+
+**受影响文件**:
+- d:\VS code\py_code\database\app\models\loan.py (导入了customer_loans)
+- d:\VS code\py_code\database\app\models\customer.py (定义了customer_loans)
+
+## 4. 导入方式不一致
+
+**问题描述**: 项目中同时使用了绝对导入和相对导入。
+
+**绝对导入示例**:
+- from app import db
+
+**相对导入示例**:
+- from .branch import Branch
+
+## 5. init_db.py导入注释的特殊说明
+
+**问题描述**: init_db.py中有一个特殊注释，但实际导入方式可能仍然导致问题。
+
+**相关代码**:
+```python
+# 从根目录的app.py导入app和db，而不是从app包导入
+from app import app, db
+```
+
+## 6. app.py中的蓝图导入问题
+
+**问题描述**: app.py中导入了transactions蓝图，但在代码中没有看到transactions.py的实现。
+
+**相关代码**:
+```python
+# 导入路由
+from app.routes import auth, dashboard, accounts, transactions, loans, employees, customers
+
+# 注册蓝图
+app.register_blueprint(transactions.bp)
+```
+
+## 7. Payment类的不一致引用
+
+**问题描述**: 在loans.py中引用了Payment类，但在loan.py模型中定义的是LoanPayment类。
+
+**受影响文件**:
+- d:\VS code\py_code\database\app\routes\loans.py
+
+## 8. dashboard.py中的模型引用问题
+
+**问题描述**: dashboard.py中使用了Payment和Transaction类，但导入语句不完整。
+
+**受影响文件**:
+- d:\VS code\py_code\database\app\routes\dashboard.py

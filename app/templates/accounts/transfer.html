@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block app_content %}
+<div class="row">
+    <div class="col-md-6 col-md-offset-3">
+        <h1>转账</h1>
+        
+        <form action="" method="post" novalidate>
+            {{ form.hidden_tag() }}
+            
+            <div class="form-group">
+                {{ form.from_account_id.label }}
+                {{ form.from_account_id(class="form-control") }}
+                {% for error in form.from_account_id.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="form-group">
+                {{ form.to_account_number.label }}
+                {{ form.to_account_number(class="form-control", placeholder="请输入目标账户号码") }}
+                {% for error in form.to_account_number.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="form-group">
+                {{ form.amount.label }}
+                {{ form.amount(class="form-control", placeholder="请输入转账金额") }}
+                {% for error in form.amount.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="form-group">
+                {{ form.description.label }}
+                {{ form.description(class="form-control", placeholder="请输入交易描述（可选）") }}
+                {% for error in form.description.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="alert alert-info">
+                <strong>注意事项：</strong>
+                <ul>
+                    <li>请仔细核对目标账户号码，确保无误</li>
+                    <li>转账操作一旦完成，无法撤销</li>
+                    <li>请确保转出账户有足够的余额</li>
+                    {% if current_user.user_type == 'customer' %}
+                    <li>您只能使用自己名下的账户进行转账</li>
+                    {% endif %}
+                </ul>
+            </div>
+            
+            <div class="form-group text-center">
+                {{ form.submit(class="btn btn-primary btn-lg") }}
+                <a href="{{ url_for('accounts.list') }}" class="btn btn-default btn-lg">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

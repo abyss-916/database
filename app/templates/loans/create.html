@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block app_content %}
+<div class="row">
+    <div class="col-md-6 col-md-offset-3">
+        <h1>创建新贷款</h1>
+        
+        <form action="" method="post" novalidate>
+            {{ form.hidden_tag() }}
+            
+            <div class="form-group">
+                {{ form.loan_number.label }}
+                {{ form.loan_number(class="form-control", placeholder="请输入贷款号码") }}
+                {% for error in form.loan_number.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="form-group">
+                {{ form.amount.label }}
+                {{ form.amount(class="form-control", placeholder="请输入贷款金额") }}
+                {% for error in form.amount.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="form-group">
+                {{ form.branch_id.label }}
+                {{ form.branch_id(class="form-control") }}
+                {% for error in form.branch_id.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="form-group">
+                <label for="customer_ids">关联客户 <span class="text-danger">*</span></label>
+                <div class="checkbox-group">
+                    {% for customer in Customer.query.all() %}
+                    <div class="checkbox">
+                        <label>
+                            <input type="checkbox" name="customer_ids" value="{{ customer.id }}">
+                            {{ customer.name }} (客户ID: {{ customer.customer_id }})
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if form.customer_ids.errors %}
+                <span class="text-danger">{{ form.customer_ids.errors[0] }}</span>
+                {% endif %}
+            </div>
+            
+            <div class="alert alert-info">
+                <strong>注意事项：</strong>
+                <ul>
+                    <li>请确保贷款号码的唯一性</li>
+                    <li>贷款金额必须大于0</li>
+                    <li>请至少选择一个关联客户</li>
+                </ul>
+            </div>
+            
+            <div class="form-group text-center">
+                {{ form.submit(class="btn btn-success btn-lg") }}
+                <a href="{{ url_for('loans.list') }}" class="btn btn-default btn-lg">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+// 为多选框添加一些交互效果
+$('.checkbox-group input[type="checkbox"]').change(function() {
+    // 确保至少选择一个客户
+    const selectedCount = $('.checkbox-group input[type="checkbox"]:checked').length;
+    if (selectedCount === 0) {
+        $(this).prop('checked', true);
+    }
+});
+</script>
+{% endblock %}

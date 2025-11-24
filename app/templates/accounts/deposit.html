@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block app_content %}
+<div class="row">
+    <div class="col-md-6 col-md-offset-3">
+        <h1>存款</h1>
+        
+        <div class="panel panel-info">
+            <div class="panel-body">
+                <p><strong>账户号码:</strong> {{ account.account_number }}</p>
+                <p><strong>账户类型:</strong> {% if account.account_type == 'savings' %}储蓄账户{% else %}支票账户{% endif %}</p>
+                <p><strong>当前余额:</strong> ¥{{ "%.2f"|format(account.balance) }}</p>
+            </div>
+        </div>
+        
+        <form action="" method="post" novalidate>
+            {{ form.hidden_tag() }}
+            
+            <div class="form-group">
+                {{ form.amount.label }}
+                {{ form.amount(class="form-control", placeholder="请输入存款金额") }}
+                {% for error in form.amount.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="form-group">
+                {{ form.description.label }}
+                {{ form.description(class="form-control", placeholder="请输入交易描述（可选）") }}
+                {% for error in form.description.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="form-group text-center">
+                {{ form.submit(class="btn btn-success btn-lg") }}
+                <a href="{{ url_for('accounts.detail', account_id=account.id) }}" class="btn btn-default btn-lg">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

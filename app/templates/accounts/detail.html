@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block app_content %}
+<div class="row">
+    <div class="col-md-12">
+        <h1>账户详情</h1>
+        
+        <div class="pull-right">
+            {% if current_user.user_type == 'employee' or account in current_user.customer.accounts %}
+            <a href="{{ url_for('accounts.deposit', account_id=account.id) }}" class="btn btn-success">存款</a>
+            <a href="{{ url_for('accounts.withdraw', account_id=account.id) }}" class="btn btn-warning">取款</a>
+            <a href="{{ url_for('accounts.transfer') }}" class="btn btn-info">转账</a>
+            {% endif %}
+        </div>
+        
+        <div class="panel panel-primary">
+            <div class="panel-heading">
+                <h3 class="panel-title">基本信息</h3>
+            </div>
+            <div class="panel-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <dl class="dl-horizontal">
+                            <dt>账户号码:</dt>
+                            <dd>{{ account.account_number }}</dd>
+                            <dt>账户类型:</dt>
+                            <dd>
+                                {% if account.account_type == 'savings' %}
+                                    储蓄账户
+                                    {% if account.savings_account %}
+                                    <br><small class="text-muted">利率: {{ account.savings_account.interest_rate }}%</small>
+                                    {% endif %}
+                                {% else %}
+                                    支票账户
+                                    {% if account.checking_account %}
+                                    <br><small class="text-muted">透支额度: ¥{{ "%.2f"|format(account.checking_account.overdraft_limit) }}</small>
+                                    {% endif %}
+                                {% endif %}
+                            </dd>
+                            <dt>当前余额:</dt>
+                            <dd class="text-primary font-weight-bold">¥{{ "%.2f"|format(account.balance) }}</dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <dl class="dl-horizontal">
+                            <dt>创建时间:</dt>
+                            <dd>{{ account.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</dd>
+                            <dt>最后访问:</dt>
+                            <dd>{{ account.last_access_date.strftime('%Y-%m-%d %H:%M:%S') }}</dd>
+                            {% if account.account_type == 'checking' and account.checking_account %}
+                            <dt>可用额度:</dt>
+                            <dd>¥{{ "%.2f"|format(account.balance + account.checking_account.overdraft_limit) }}</dd>
+                            {% endif %}
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel panel-success">
+            <div class="panel-heading">
+                <h3 class="panel-title">关联客户</h3>
+            </div>
+            <div class="panel-body">
+                {% if account.customers %}
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>客户ID</th>
+                            <th>姓名</th>
+                            <th>证件号</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for customer in account.customers %}
+                        <tr>
+                            <td>{{ customer.customer_id }}</td>
+                            <td>{{ customer.name }}</td>
+                            <td>{{ customer.id_card }}</td>
+                            <td>
+                                <a href="{{ url_for('customers.detail', customer_id=customer.id) }}" class="btn btn-sm btn-info">查看详情</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p>该账户没有关联客户。</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="panel panel-info">
+            <div class="panel-heading">
+                <h3 class="panel-title">最近交易记录 (前20条)</h3>
+            </div>
+            <div class="panel-body">
+                {% if transactions %}
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>交易类型</th>
+                            <th>日期</th>
+                            <th>金额</th>
+                            <th>描述</th>
+                            <th>交易对象</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for transaction in transactions %}
+                        <tr>
+                            <td>
+                                {% if transaction.transaction_type == 'deposit' %}
+                                <span class="label label-success">存款</span>
+                                {% elif transaction.transaction_type == 'withdraw' %}
+                                <span class="label label-danger">取款</span>
+                                {% elif transaction.transaction_type == 'transfer' %}
+                                <span class="label label-info">转账</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ transaction.transaction_date.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>
+                                {% if transaction.transaction_type == 'withdraw' or (transaction.transaction_type == 'transfer' and transaction.from_account_id == account.id) %}
+                                -¥{{ "%.2f"|format(transaction.amount) }}
+                                {% else %}
+                                +¥{{ "%.2f"|format(transaction.amount) }}
+                                {% endif %}
+                            </td>
+                            <td>{{ transaction.description }}</td>
+                            <td>
+                                {% if transaction.transaction_type == 'deposit' %}
+                                系统
+                                {% elif transaction.transaction_type == 'withdraw' %}
+                                系统
+                                {% elif transaction.transaction_type == 'transfer' %}
+                                    {% if transaction.from_account_id == account.id %}
+                                    转入: {{ transaction.to_account.account_number }}
+                                    {% else %}
+                                    转出: {{ transaction.from_account.account_number }}
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p>该账户暂无交易记录。</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

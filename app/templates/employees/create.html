@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block app_content %}
+<div class="row">
+    <div class="col-md-6 col-md-offset-3">
+        <h1>创建新员工</h1>
+        
+        <form action="" method="post" novalidate>
+            {{ form.hidden_tag() }}
+            
+            <div class="form-group">
+                {{ form.employee_id.label }}
+                {{ form.employee_id(class="form-control", placeholder="请输入员工工号") }}
+                {% for error in form.employee_id.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="form-group">
+                {{ form.name.label }}
+                {{ form.name(class="form-control", placeholder="请输入员工姓名") }}
+                {% for error in form.name.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="form-group">
+                {{ form.position.label }}
+                {{ form.position(class="form-control", placeholder="请输入职位") }}
+                {% for error in form.position.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="form-group">
+                {{ form.branch_id.label }}
+                {{ form.branch_id(class="form-control") }}
+                {% for error in form.branch_id.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <hr>
+            
+            <h3>账户信息</h3>
+            
+            <div class="form-group">
+                {{ form.username.label }}
+                {{ form.username(class="form-control", placeholder="请输入用户名") }}
+                {% for error in form.username.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="form-group">
+                {{ form.email.label }}
+                {{ form.email(class="form-control", placeholder="请输入邮箱") }}
+                {% for error in form.email.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="form-group">
+                {{ form.password.label }}
+                {{ form.password(class="form-control", placeholder="请输入密码") }}
+                {% for error in form.password.errors %}
+                <span class="text-danger">{{ error }}</span>
+                {% endfor %}
+                <div class="help-block">密码长度至少为8个字符</div>
+            </div>
+            
+            <div class="alert alert-info">
+                <strong>注意事项：</strong>
+                <ul>
+                    <li>员工工号必须唯一</li>
+                    <li>用户名和邮箱必须唯一</li>
+                    <li>密码长度至少为8个字符</li>
+                </ul>
+            </div>
+            
+            <div class="form-group text-center">
+                {{ form.submit(class="btn btn-success btn-lg") }}
+                <a href="{{ url_for('employees.list') }}" class="btn btn-default btn-lg">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

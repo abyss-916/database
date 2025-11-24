@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block app_content %}
+<div class="row">
+    <div class="col-md-12">
+        <h1>欢迎使用银行管理系统</h1>
+        
+        {% if user_type == 'employee' %}
+        <!-- 员工仪表板 -->
+        <div class="row">
+            <div class="col-md-3">
+                <div class="panel panel-primary">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">客户数量</h3>
+                    </div>
+                    <div class="panel-body text-center">
+                        <h1>{{ data.customer_count }}</h1>
+                        <a href="#">查看所有客户</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="panel panel-success">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">账户数量</h3>
+                    </div>
+                    <div class="panel-body text-center">
+                        <h1>{{ data.account_count }}</h1>
+                        <a href="#">查看所有账户</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="panel panel-warning">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">贷款数量</h3>
+                    </div>
+                    <div class="panel-body text-center">
+                        <h1>{{ data.loan_count }}</h1>
+                        <a href="#">查看所有贷款</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="panel panel-danger">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">总存款余额</h3>
+                    </div>
+                    <div class="panel-body text-center">
+                        <h1>¥{{ "%.2f"|format(data.total_balance) }}</h1>
+                        <a href="#">查看详情</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="panel panel-info">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">贷款统计</h3>
+                    </div>
+                    <div class="panel-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>总贷款金额:</strong> ¥{{ "%.2f"|format(data.total_loan_amount) }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>未还贷款余额:</strong> ¥{{ "%.2f"|format(data.total_loan_balance) }}</p>
+                            </div>
+                        </div>
+                        <div class="progress">
+                            {% if data.total_loan_amount > 0 %}
+                            <div class="progress-bar progress-bar-success" style="width: {{ (1 - data.total_loan_balance / data.total_loan_amount) * 100 }}%">
+                                已还款 {{ "%.1f"|format((1 - data.total_loan_balance / data.total_loan_amount) * 100) }}%
+                            </div>
+                            <div class="progress-bar progress-bar-danger" style="width: {{ (data.total_loan_balance / data.total_loan_amount) * 100 }}%">
+                                未还款 {{ "%.1f"|format((data.total_loan_balance / data.total_loan_amount) * 100) }}%
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="panel panel-info">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">最近活动</h3>
+                    </div>
+                    <div class="panel-body">
+                        {% if data.recent_activities %}
+                        <ul class="list-group">
+                            {% for activity in data.recent_activities %}
+                            <li class="list-group-item">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        {{ activity.description }}
+                                    </div>
+                                    <div class="col-md-3 text-right">
+                                        ¥{{ "%.2f"|format(activity.amount) }}
+                                    </div>
+                                    <div class="col-md-3 text-right">
+                                        {{ activity.date.strftime('%Y-%m-%d %H:%M') }}
+                                    </div>
+                                </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p class="text-center">暂无最近活动</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {% else %}
+        <!-- 客户仪表板 -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="panel panel-primary">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">总账户余额</h3>
+                    </div>
+                    <div class="panel-body text-center">
+                        <h1>¥{{ "%.2f"|format(data.total_account_balance) }}</h1>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="panel panel-danger">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">总贷款余额</h3>
+                    </div>
+                    <div class="panel-body text-center">
+                        <h1>¥{{ "%.2f"|format(data.total_loan_balance) }}</h1>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="panel panel-info">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">我的账户</h3>
+                    </div>
+                    <div class="panel-body">
+                        {% if data.accounts %}
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>账户号码</th>
+                                    <th>账户类型</th>
+                                    <th>余额</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for account in data.accounts %}
+                                <tr>
+                                    <td>{{ account.account_number }}</td>
+                                    <td>{% if account.account_type == 'savings' %}储蓄账户{% else %}支票账户{% endif %}</td>
+                                    <td>¥{{ "%.2f"|format(account.balance) }}</td>
+                                    <td>
+                                        <a href="{{ url_for('accounts.detail', account_id=account.id) }}" class="btn btn-info btn-sm">详情</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <p class="text-center">您还没有银行账户。请联系客服开通账户。</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="panel panel-warning">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">我的贷款</h3>
+                    </div>
+                    <div class="panel-body">
+                        {% if data.loans %}
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>贷款号码</th>
+                                    <th>贷款金额</th>
+                                    <th>剩余余额</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for loan in data.loans %}
+                                <tr>
+                                    <td>{{ loan.loan_number }}</td>
+                                    <td>¥{{ "%.2f"|format(loan.amount) }}</td>
+                                    <td>¥{{ "%.2f"|format(loan.remaining_balance) }}</td>
+                                    <td>
+                                        <a href="{{ url_for('loans.detail', loan_id=loan.id) }}" class="btn btn-info btn-sm">详情</a>
+                                        <a href="{{ url_for('loans.payment', loan_id=loan.id) }}" class="btn btn-warning btn-sm">还款</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <p class="text-center">您目前没有未偿还的贷款。</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">最近交易</h3>
+                    </div>
+                    <div class="panel-body">
+                        {% if data.recent_transactions %}
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>交易日期</th>
+                                    <th>类型</th>
+                                    <th>描述</th>
+                                    <th>金额</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for transaction in data.recent_transactions %}
+                                <tr>
+                                    <td>{{ transaction.transaction_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>转账</td>
+                                    <td>
+                                        {% if transaction.from_account in data.accounts %}
+                                        转出到 {{ transaction.to_account.account_number }}
+                                        {% else %}
+                                        从 {{ transaction.from_account.account_number }} 转入
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-right">
+                                        {% if transaction.from_account in data.accounts %}
+                                        -¥{{ "%.2f"|format(transaction.amount) }}
+                                        {% else %}
+                                        +¥{{ "%.2f"|format(transaction.amount) }}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <p class="text-center">暂无最近交易记录。</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+// 这里可以添加一些JavaScript代码来增强仪表板的交互性
+// 例如：图表显示、动态更新等
+</script>
+{% endblock %}
