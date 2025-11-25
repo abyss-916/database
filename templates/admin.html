@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>银行数据库系统</title>
+  <title>银行管理系统 - 管理员控制台</title>
   <style>
     :root { --bg:#0f172a; --primary:#2563eb; --primary-2:#1d4ed8; --card:#0b1222; --text:#e5e7eb; --muted:#94a3b8; --success:#10b981; --error:#ef4444; --border:#1f2937; }
     * { box-sizing: border-box; }
@@ -52,7 +52,9 @@
     let activeTab = 'branches'
     let toastTimer
     async function api(path, method, body) {
-      const res = await fetch(path, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
+      const headers = { 'Content-Type': 'application/json' }
+      if (window.csrfToken) headers['X-CSRF-Token'] = window.csrfToken
+      const res = await fetch(path, { method, headers, credentials: 'same-origin', body: body ? JSON.stringify(body) : undefined })
       const json = await res.json()
       return { status: res.status, json }
     }
@@ -69,13 +71,19 @@
       el.className = 'status ' + (ok ? 'pill-ok' : 'pill-err')
       toast(msg)
     }
+    async function logout() {
+      const r = await api('/logout', 'POST')
+      if (r.status === 200) {
+        location.href = '/'
+      }
+    }
     function activateTab(name) {
       activeTab = name
       document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name))
       document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name))
     }
     async function loadConfig() {
-      const r = await fetch('/db-config')
+      const r = await fetch('/db-config', { credentials: 'same-origin' })
       const j = await r.json()
       const el = document.getElementById('cfg')
       el.innerHTML = `连接配置：<b>${j.host}:${j.port}</b> / <b>${j.database}</b> / <b>${j.user}</b> / 密码${j.has_password ? '已设置' : '未设置'}`
@@ -85,7 +93,7 @@
       setStatus('initStatus', r.status === 200, r.status === 200 ? '初始化完成' : '初始化失败: ' + r.json.error)
     }
     async function health() {
-      const r = await fetch('/health')
+      const r = await fetch('/health', { credentials: 'same-origin' })
       const j = await r.json()
       const el = document.getElementById('health')
       el.textContent = j.ok ? '数据库连接正常' : '数据库连接失败: ' + j.error
@@ -177,12 +185,12 @@
       setStatus('r_status', r.status === 200, r.status === 200 ? '还款已记录' : r.json.error)
       loadRepayments()
     }
-    async function loadBranches() { const r = await fetch('/branches'); renderTable('branches_tbl', await r.json()) }
-    async function loadEmployees() { const r = await fetch('/employees'); renderTable('employees_tbl', await r.json()) }
-    async function loadCustomers() { const r = await fetch('/customers'); renderTable('customers_tbl', await r.json()) }
-    async function loadAccounts() { const r = await fetch('/accounts'); renderTable('accounts_tbl', await r.json()) }
-    async function loadLoans() { const r = await fetch('/loans'); renderTable('loans_tbl', await r.json()) }
-    async function loadRepayments() { const r = await fetch('/repayments'); renderTable('repayments_tbl', await r.json()) }
+    async function loadBranches() { const r = await fetch('/branches', { credentials:'same-origin' }); renderTable('branches_tbl', await r.json()) }
+    async function loadEmployees() { const r = await fetch('/employees', { credentials:'same-origin' }); renderTable('employees_tbl', await r.json()) }
+    async function loadCustomers() { const r = await fetch('/customers', { credentials:'same-origin' }); renderTable('customers_tbl', await r.json()) }
+    async function loadAccounts() { const r = await fetch('/accounts', { credentials:'same-origin' }); renderTable('accounts_tbl', await r.json()) }
+    async function loadLoans() { const r = await fetch('/loans', { credentials:'same-origin' }); renderTable('loans_tbl', await r.json()) }
+    async function loadRepayments() { const r = await fetch('/repayments', { credentials:'same-origin' }); renderTable('repayments_tbl', await r.json()) }
     function renderTable(id, rows) {
       const el = document.getElementById(id)
       if (!rows.length) { el.innerHTML = '<thead><tr><th>无数据</th></tr></thead>'; return }
@@ -191,11 +199,38 @@
       const tbody = '<tbody>' + rows.map(r => '<tr>' + keys.map(k => '<td>' + (r[k] ?? '') + '</td>').join('') + '</tr>').join('') + '</tbody>'
       el.innerHTML = thead + tbody
     }
-    window.addEventListener('load', () => {
+    window.addEventListener('load', async () => {
+      try {
+        const r = await fetch('/csrf-token', { credentials: 'same-origin' })
+        const j = await r.json()
+        window.csrfToken = j.token
+      } catch {}
       health(); loadConfig(); activateTab('branches')
       loadBranches(); loadEmployees(); loadCustomers(); loadAccounts(); loadLoans(); loadRepayments(); showTypeFields()
       document.querySelectorAll('.tab').forEach(btn => btn.addEventListener('click', () => activateTab(btn.dataset.tab)))
       document.getElementById('branch_form').addEventListener('submit', submitBranch)
+      const buf = document.getElementById('branch_update_form')
+      if (buf) {
+        buf.addEventListener('submit', async (e) => {
+          e.preventDefault()
+          const id = document.getElementById('bu_id').value
+          const name = document.getElementById('bu_name').value
+          const city = document.getElementById('bu_city').value
+          const r = await api('/branches/update', 'POST', { id, name, city })
+          setStatus('bu_status', r.status === 200, r.status === 200 ? '支行已更新' : '更新失败')
+          loadBranches()
+        })
+      }
+      const bdf = document.getElementById('branch_delete_form')
+      if (bdf) {
+        bdf.addEventListener('submit', async (e) => {
+          e.preventDefault()
+          const id = document.getElementById('bd_id').value
+          const r = await api('/branches/delete', 'POST', { id })
+          setStatus('bd_status2', r.status === 200, r.status === 200 ? '支行已删除' : '删除失败')
+          loadBranches()
+        })
+      }
       document.getElementById('emp_form').addEventListener('submit', submitEmployee)
       document.getElementById('dep_form').addEventListener('submit', submitDependent)
       document.getElementById('cust_form').addEventListener('submit', submitCustomer)
@@ -203,16 +238,57 @@
       document.getElementById('ao_form').addEventListener('submit', submitAccountOwner)
       document.getElementById('loan_form').addEventListener('submit', submitLoan)
       document.getElementById('repay_form').addEventListener('submit', submitRepayment)
+      const qf = document.getElementById('query_form')
+      if (qf) {
+        qf.addEventListener('submit', async (e) => {
+          e.preventDefault()
+          const name = document.getElementById('q_name').value
+          const city = document.getElementById('q_city').value
+          const idno = document.getElementById('q_idno').value
+          const size = document.getElementById('q_size').value
+          const page = document.getElementById('q_page').value
+          const u = `/admin/query/customers?name=${encodeURIComponent(name)}&city=${encodeURIComponent(city)}&idno=${encodeURIComponent(idno)}&size=${encodeURIComponent(size)}&page=${encodeURIComponent(page)}`
+          const r = await fetch(u, { credentials:'same-origin' })
+          const rows = await r.json()
+          renderTable('query_tbl', rows)
+        })
+        document.getElementById('q_export').addEventListener('click', async () => {
+          const name = document.getElementById('q_name').value
+          const city = document.getElementById('q_city').value
+          const idno = document.getElementById('q_idno').value
+          const u = `/admin/export/customers?name=${encodeURIComponent(name)}&city=${encodeURIComponent(city)}&idno=${encodeURIComponent(idno)}`
+          const r = await fetch(u, { credentials:'same-origin' })
+          const t = await r.text()
+          const blob = new Blob([t], { type:'text/csv' })
+          const a = document.createElement('a')
+          a.href = URL.createObjectURL(blob)
+          a.download = 'customers.csv'
+          a.click()
+        })
+        document.getElementById('bd_get').addEventListener('click', async () => {
+          const r = await api('/admin/sensitive/start', 'POST')
+          if (r.status === 200) { document.getElementById('bd_code').value = r.json.code; setStatus('bd_status', true, '已生成验证代码') } else { setStatus('bd_status', false, '生成验证代码失败') }
+        })
+        document.getElementById('batch_del_form').addEventListener('submit', async (e) => {
+          e.preventDefault()
+          const table = document.getElementById('bd_table').value
+          const ids = document.getElementById('bd_ids').value.split(',').map(x => parseInt(x.trim())).filter(x => !isNaN(x))
+          const code = document.getElementById('bd_code').value.trim()
+          const r = await api('/admin/batch/delete', 'POST', { table, ids, code })
+          setStatus('bd_status', r.status === 200, r.status === 200 ? '批量删除完成' : '批量删除失败')
+        })
+      }
     })
   </script>
 </head>
 <body>
   <div class="hero">
     <div class="hero-inner">
-      <div class="brand"><div class="brand-badge">银</div>银行数据库系统</div>
+      <div class="brand"><div class="brand-badge">🏦</div>银行管理系统 - 管理员控制台</div>
       <div class="actions">
         <button class="btn btn-primary" onclick="initDb()">初始化数据库</button>
         <button class="btn btn-muted" onclick="health()">检查连接</button>
+        <button class="btn btn-muted" onclick="logout()">退出登录</button>
       </div>
     </div>
   </div>
@@ -229,6 +305,7 @@
       <div class="tab" data-tab="accounts">账户</div>
       <div class="tab" data-tab="loans">贷款</div>
       <div class="tab" data-tab="repayments">还款</div>
+      <div class="tab" data-tab="query">查询</div>
     </div>
     <div class="panels">
       <div class="panel panel-grid active" id="panel-branches">
@@ -240,6 +317,22 @@
           </div>
           <div class="form-actions"><button class="btn btn-primary" type="submit">创建支行</button></div>
           <div id="b_status" class="status"></div>
+        </form>
+        <form id="branch_update_form" style="margin-top:18px">
+          <div class="form-row">
+            <div><label>支行ID<input id="bu_id" type="number" required></label></div>
+            <div><label>名称<input id="bu_name" required></label></div>
+            <div><label>城市<input id="bu_city" required></label></div>
+          </div>
+          <div class="form-actions"><button class="btn btn-primary" type="submit">更新支行</button></div>
+          <div id="bu_status" class="status"></div>
+        </form>
+        <form id="branch_delete_form" style="margin-top:12px">
+          <div class="form-row">
+            <div><label>支行ID<input id="bd_id" type="number" required></label></div>
+          </div>
+          <div class="form-actions"><button class="btn btn-primary" type="submit">删除支行</button></div>
+          <div id="bd_status2" class="status"></div>
         </form>
         <div class="table-card"><table id="branches_tbl"></table></div>
       </div>
@@ -334,6 +427,34 @@
           <div id="r_status" class="status"></div>
         </form>
         <div class="table-card"><table id="repayments_tbl"></table></div>
+      </div>
+      <div class="panel panel-grid" id="panel-query">
+        <form id="query_form">
+          <div class="form-row">
+            <div><label>姓名包含<input id="q_name"></label></div>
+            <div><label>城市包含<input id="q_city"></label></div>
+            <div><label>证件号包含<input id="q_idno"></label></div>
+            <div><label>每页条数<input id="q_size" type="number" value="10"></label></div>
+            <div><label>页码<input id="q_page" type="number" value="1"></label></div>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" type="submit">查询客户</button>
+            <button class="btn btn-muted" type="button" id="q_export">导出CSV</button>
+          </div>
+        </form>
+        <div class="table-card"><table id="query_tbl"></table></div>
+        <form id="batch_del_form" style="margin-top:18px">
+          <div class="form-row">
+            <div><label>数据表<select id="bd_table"><option value="branch">支行</option><option value="employee">员工</option><option value="customer">客户</option><option value="account">账户</option><option value="loan">贷款</option><option value="repayment">还款</option></select></label></div>
+            <div><label>ID列表(逗号分隔)<input id="bd_ids" required></label></div>
+            <div><label>验证代码<input id="bd_code" required placeholder="点击获取"></label></div>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-muted" type="button" id="bd_get">获取验证代码</button>
+            <button class="btn btn-primary" type="submit">批量删除</button>
+          </div>
+          <div id="bd_status" class="status"></div>
+        </form>
       </div>
     </div>
   </div>

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用户注册 - 银行管理系统</title>
+  <style>
+    :root { 
+      --bg:#0f172a; 
+      --primary:#2563eb; 
+      --primary-2:#1d4ed8; 
+      --primary-glow:rgba(37,99,235,.15);
+      --card:#0b1222; 
+      --text:#e5e7eb; 
+      --muted:#94a3b8; 
+      --error:#ef4444;
+      --success:#10b981;
+      --border:rgba(148,163,184,.12);
+      --border-focus:rgba(37,99,235,.4);
+    }
+    
+    * { box-sizing: border-box; }
+    
+    body { 
+      margin:0; 
+      min-height:100vh; 
+      display:grid; 
+      place-items:center; 
+      background: radial-gradient(1200px 800px at 15% 15%, #0b1222 0%, #0f172a 40%, #0a0f1f 100%); 
+      color: var(--text); 
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+      line-height: 1.5;
+    }
+    
+    .register-container {
+      width: 100%;
+      max-width: 480px;
+      padding: 20px;
+    }
+    
+    .card { 
+      background: linear-gradient(180deg, rgba(11,18,34,.95), rgba(11,18,34,.75)); 
+      border: 1px solid var(--border); 
+      border-radius:20px; 
+      padding:32px; 
+      backdrop-filter: blur(10px);
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,.25), 0 0 40px var(--primary-glow);
+      transition: all 0.3s ease;
+    }
+    
+    .card:hover {
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,.35), 0 0 60px var(--primary-glow);
+    }
+    
+    .logo {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    
+    .logo h1 {
+      margin: 0;
+      font-size: 24px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-weight: 700;
+    }
+    
+    .logo p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    
+    h2 { 
+      margin:0 0 24px; 
+      font-size:22px; 
+      color:#cbd5e1; 
+      text-align:center; 
+      font-weight: 600;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    label { 
+      font-size:14px; 
+      color:#94a3b8; 
+      display:block; 
+      margin-bottom:8px; 
+      font-weight: 500;
+    }
+    
+    input { 
+      width:100%; 
+      padding:12px 16px; 
+      border-radius:12px; 
+      border:1px solid rgba(148,163,184,.22); 
+      background:#0b1222; 
+      color:var(--text); 
+      outline:none; 
+      font-size: 15px;
+      transition: all 0.2s ease;
+    }
+    
+    input:focus { 
+      border-color: var(--primary); 
+      box-shadow: 0 0 0 4px var(--border-focus);
+      transform: translateY(-1px);
+    }
+    
+    input::placeholder {
+      color: var(--muted);
+      opacity: 0.7;
+    }
+    
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    
+    .actions { 
+      margin-top:24px; 
+      display:flex; 
+      gap:12px; 
+      justify-content:space-between; 
+    }
+    
+    .btn { 
+      appearance:none; 
+      border:none; 
+      border-radius:12px; 
+      padding:12px 20px; 
+      font-weight:600; 
+      cursor:pointer; 
+      transition: all .2s ease; 
+      font-size: 15px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.2), transparent);
+      transition: left 0.5s;
+    }
+    
+    .btn:hover::before {
+      left: 100%;
+    }
+    
+    .btn-primary { 
+      background: linear-gradient(135deg, var(--primary), var(--primary-2)); 
+      color:#fff; 
+      flex: 1;
+      box-shadow: 0 4px 15px rgba(37,99,235,.3);
+    }
+    
+    .btn-primary:hover { 
+      filter: brightness(1.1); 
+      transform: translateY(-2px); 
+      box-shadow: 0 6px 20px rgba(37,99,235,.4);
+    }
+    
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+    
+    .btn-secondary { 
+      background: linear-gradient(135deg, rgba(148,163,184,.15), rgba(148,163,184,.25)); 
+      color:var(--text); 
+      border:1px solid rgba(148,163,184,.2); 
+    }
+    
+    .btn-secondary:hover { 
+      background: rgba(148,163,184,.25); 
+      transform: translateY(-2px); 
+      border-color: rgba(148,163,184,.4);
+    }
+    
+    .err { 
+      color: var(--error); 
+      font-size:13px; 
+      margin-top:12px; 
+      text-align:center; 
+      padding: 8px;
+      background: rgba(239,68,68,.1);
+      border-radius: 8px;
+      border: 1px solid rgba(239,68,68,.2);
+    }
+    
+    .success {
+      color: var(--success);
+      font-size:13px; 
+      margin-top:12px; 
+      text-align:center; 
+      padding: 8px;
+      background: rgba(16,185,129,.1);
+      border-radius: 8px;
+      border: 1px solid rgba(16,185,129,.2);
+    }
+    
+    .info-box {
+      background: rgba(37,99,235,.1);
+      border: 1px solid rgba(37,99,235,.2);
+      border-radius: 10px;
+      padding: 12px;
+      margin-top: 16px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+    
+    .back-link { 
+      text-align:center; 
+      margin-top:20px; 
+      font-size: 14px;
+    }
+    
+    .back-link a { 
+      color: var(--primary); 
+      text-decoration:none; 
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+    
+    .back-link a:hover { 
+      text-decoration:underline; 
+      color: var(--primary-2);
+    }
+    
+    @media (max-width: 480px) {
+      .register-container {
+        padding: 16px;
+      }
+      
+      .card {
+        padding: 24px;
+      }
+      
+      .form-row {
+        grid-template-columns: 1fr;
+        gap: 0;
+      }
+      
+      .actions {
+        flex-direction: column;
+      }
+      
+      .btn-secondary {
+        order: -1;
+      }
+    }
+  </style>
+  <script>
+    let csrfToken
+    async function getCsrf() {
+      const r = await fetch('/csrf-token', { credentials: 'same-origin' })
+      const j = await r.json()
+      csrfToken = j.token
+    }
+    
+    async function register(e) {
+      e.preventDefault()
+      if (!csrfToken) await getCsrf()
+      const u = document.getElementById('r_u').value.trim()
+      const p = document.getElementById('r_p').value
+      const n = document.getElementById('r_name').value.trim()
+      const idno = document.getElementById('r_idno').value.trim()
+      const city = document.getElementById('r_city').value.trim()
+      const street = document.getElementById('r_street').value.trim()
+      const okName = /^[A-Za-z0-9]{4,12}$/.test(u)
+      if (!u || !p || !n || !idno || !city || !street) { setErr('r_err', '请完整填写注册信息'); return }
+      if (!okName) { setErr('r_err', '账号需为4-12位英文或数字'); return }
+      if (u === 'administrator') { setErr('r_err', '管理员账户禁止注册'); return }
+      const r = await fetch('/register', { method: 'POST', headers: { 'Content-Type':'application/json', 'X-CSRF-Token': csrfToken }, credentials:'same-origin', body: JSON.stringify({ username: u, password: p, name: n, identity_no: idno, city, street }) })
+      const ct = r.headers.get('content-type') || ''
+      const isJson = ct.includes('application/json')
+      const j = isJson ? await r.json() : null
+      if (r.status === 200) { 
+        alert('注册成功！请使用您的账户登录。')
+        window.location.href = '/login'
+        return 
+      }
+      setErr('r_err', '注册失败：' + ((j && j.error) || '未知错误'))
+    }
+    
+    function setErr(id, msg) { 
+      const el = document.getElementById(id)
+      el.textContent = msg
+    }
+    
+    window.addEventListener('load', getCsrf)
+  </script>
+</head>
+<body>
+  <div class="register-container">
+    <div class="card">
+      <div class="logo">
+        <h1>🏦 银行管理系统</h1>
+        <p>创建您的账户</p>
+      </div>
+      
+      <h2>用户注册</h2>
+      
+      <form id="reg_form" onsubmit="register(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="r_u">用户名</label>
+            <input id="r_u" type="text" placeholder="4-12位英文或数字" required pattern="[A-Za-z0-9]{4,12}" title="4-12位英文或数字">
+          </div>
+          
+          <div class="form-group">
+            <label for="r_p">密码</label>
+            <input id="r_p" type="password" placeholder="请输入密码" required>
+          </div>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="r_name">姓名</label>
+            <input id="r_name" type="text" placeholder="请输入真实姓名" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="r_idno">证件号</label>
+            <input id="r_idno" type="text" placeholder="请输入证件号码" required>
+          </div>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="r_city">城市</label>
+            <input id="r_city" type="text" placeholder="请输入所在城市" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="r_street">街道</label>
+            <input id="r_street" type="text" placeholder="请输入详细地址" required>
+          </div>
+        </div>
+        
+        <div class="actions">
+          <button class="btn btn-secondary" type="button" onclick="window.location.href='/'">返回首页</button>
+          <button class="btn btn-primary" type="submit">立即注册</button>
+        </div>
+        
+        <div id="r_err" class="err"></div>
+        
+        <div class="info-box">
+          <div>注册成功后请使用您的账户登录</div>
+        </div>
+      </form>
+      
+      <div class="back-link">
+        <a href="/login">已有账户？立即登录</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

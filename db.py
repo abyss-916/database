@@ -21,7 +21,14 @@ def get_config():
 
 def get_conn():
     c = get_config()
-    return psycopg2.connect(host=c['host'], port=c['port'], dbname=c['database'], user=c['user'], password=c['password'])
+    return psycopg2.connect(
+        host=c['host'],
+        port=c['port'],
+        dbname=c['database'],
+        user=c['user'],
+        password=c['password'],
+        client_encoding='utf8'
+    )
 
 def init_db():
     path = os.path.join(os.path.dirname(__file__), 'schema.sql')

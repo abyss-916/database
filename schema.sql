@@ -130,3 +130,45 @@ CREATE INDEX IF NOT EXISTS idx_account_customer_cust ON account_customer(custome
 CREATE INDEX IF NOT EXISTS idx_loan_branch ON loan(branch_id);
 CREATE INDEX IF NOT EXISTS idx_loan_customer_cust ON loan_customer(customer_id);
 CREATE INDEX IF NOT EXISTS idx_repayment_loan ON repayment(loan_id);
+CREATE TYPE user_role AS ENUM ('admin','user');
+CREATE TABLE IF NOT EXISTS app_user (
+  id BIGSERIAL PRIMARY KEY,
+  username VARCHAR(64) NOT NULL UNIQUE,
+  role user_role NOT NULL,
+  password_hash BYTEA NOT NULL,
+  password_salt BYTEA NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_login_at TIMESTAMP,
+  failed_attempts INTEGER NOT NULL DEFAULT 0,
+  locked_until TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS activity_log (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  action VARCHAR(128) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  meta JSONB
+);
+CREATE TABLE IF NOT EXISTS user_customer (
+  user_id BIGINT PRIMARY KEY REFERENCES app_user(id) ON DELETE CASCADE,
+  customer_id BIGINT UNIQUE REFERENCES customer(id) ON DELETE SET NULL
+);
+
+-- 创建独立的管理员表
+CREATE TABLE IF NOT EXISTS admin_user (
+  id BIGSERIAL PRIMARY KEY,
+  username VARCHAR(64) NOT NULL UNIQUE,
+  password_hash BYTEA NOT NULL,
+  password_salt BYTEA NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_login_at TIMESTAMP,
+  failed_attempts INTEGER NOT NULL DEFAULT 0,
+  locked_until TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS admin_activity_log (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES admin_user(id) ON DELETE CASCADE,
+  action VARCHAR(128) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  meta JSONB
+);
