@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>支行查询</title>
+  <style>
+    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; background:#f5f7fa; margin:0 }
+    .header { background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.1); padding:16px 24px; display:flex; justify-content:space-between; align-items:center }
+    .logo { font-weight:700; color:#2d3748 }
+    .container { max-width:900px; margin:24px auto; padding:0 24px }
+    .card { background:#fff; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.1); padding:24px; margin-bottom:24px }
+    .form-group { margin-bottom:16px }
+    label { display:block; margin-bottom:8px; color:#4a5568 }
+    input { width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:6px; font-size:16px }
+    .btn { padding:8px 16px; border-radius:6px; border:none; background:#4299e1; color:#fff; cursor:pointer }
+    table { width:100%; border-collapse:collapse }
+    th,td { text-align:left; padding:12px; border-bottom:1px solid #e2e8f0 }
+    th { background:#f7fafc; color:#4a5568 }
+    .alert { padding:12px; border-radius:6px; margin:16px 0 }
+    .alert-error { background:#fed7d7; color:#742a2a; border:1px solid #feb2b2 }
+    .highlight { font-weight:700; color:#2b6cb0 }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">🏦 支行查询</div>
+    <div><a class="btn" href="/admin">返回仪表盘</a></div>
+  </div>
+  <div class="container">
+    <div class="card">
+      <div class="form-group">
+        <label>联行号</label>
+        <input id="union_no" placeholder="请输入联行号">
+      </div>
+      <div class="form-group">
+        <label><input type="checkbox" id="fuzzy"> 模糊查询</label>
+      </div>
+      <button class="btn" onclick="doQuery()">查询</button>
+      <div id="err" class="alert alert-error" style="display:none"></div>
+    </div>
+    <div class="card">
+      <table id="result"><thead></thead><tbody></tbody></table>
+    </div>
+  </div>
+  <script>
+    async function doQuery(){
+      const n = document.getElementById('union_no').value.trim()
+      const f = document.getElementById('fuzzy').checked
+      if(!n){ showErr('请填写联行号'); return }
+      const url = '/admin/api/query/branch?union_no=' + encodeURIComponent(n) + (f?'&fuzzy=1':'')
+      const r = await fetch(url)
+      const j = await r.json()
+      if(!r.ok){ showErr(j.error||'查询失败'); return }
+      render(j, f)
+    }
+    function showErr(msg){ const el = document.getElementById('err'); el.textContent=msg; el.style.display='block' }
+    function render(data, isList){
+      const t = document.getElementById('result')
+      const thead = '<tr><th class="highlight">联行号</th><th>支行名称</th><th>城市</th><th>地址</th><th>联系电话</th><th>负责人</th><th>成立日期</th></tr>'
+      let rows = []
+      const list = isList ? data : [data]
+      rows = list.map(r => `<tr><td class="highlight">${r.union_no||''}</td><td>${r.name||''}</td><td>${r.city||''}</td><td>${r.address||''}</td><td>${r.phone||''}</td><td>${r.manager||''}</td><td>${r.established_date||''}</td></tr>`)
+      t.querySelector('thead').innerHTML = thead
+      t.querySelector('tbody').innerHTML = rows.join('')
+      document.getElementById('err').style.display='none'
+    }
+  </script>
+</body>
+</html>

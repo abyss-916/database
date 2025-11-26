@@ -1,463 +1,816 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>银行管理系统 - 管理员控制台</title>
+  <title>银行管理系统 - 管理员</title>
   <style>
-    :root { --bg:#0f172a; --primary:#2563eb; --primary-2:#1d4ed8; --card:#0b1222; --text:#e5e7eb; --muted:#94a3b8; --success:#10b981; --error:#ef4444; --border:#1f2937; }
-    * { box-sizing: border-box; }
-    body { margin:0; background: radial-gradient(1100px 600px at 10% 10%, #0b1222 0%, #0f172a 35%, #0a0f1f 100%); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif; }
-    .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
-    .hero { background: linear-gradient(135deg, rgba(37,99,235,.18), rgba(29,78,216,.18)); border-bottom: 1px solid rgba(148,163,184,.15); }
-    .hero-inner { max-width: 1200px; margin: 0 auto; padding: 28px 24px; display:flex; align-items:center; justify-content:space-between; }
-    .brand { display:flex; align-items:center; gap:12px; font-weight:700; font-size:22px; letter-spacing:.3px; }
-    .brand-badge { width:40px; height:40px; border-radius:12px; background: linear-gradient(135deg, var(--primary), var(--primary-2)); display:flex; align-items:center; justify-content:center; color:#fff; }
-    .actions { display:flex; gap:10px; }
-    .btn { appearance:none; border:none; border-radius:10px; padding:10px 14px; font-weight:600; cursor:pointer; transition: all .18s ease; }
-    .btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-2)); color:#fff; }
-    .btn-primary:hover { filter: brightness(1.05); transform: translateY(-1px); }
-    .btn-muted { background: rgba(148,163,184,.15); color: var(--text); }
-    .btn-muted:hover { background: rgba(148,163,184,.25); }
-    .grid-cards { display:grid; grid-template-columns: repeat(3,1fr); gap:18px; margin-top:18px; }
-    .card { background: linear-gradient(180deg, rgba(11,18,34,.9), rgba(11,18,34,.6)); border: 1px solid rgba(148,163,184,.12); border-radius:16px; padding:16px; backdrop-filter: blur(6px); }
-    .card h3 { margin:0 0 8px; font-size:16px; color:#cbd5e1; }
-    .pill { display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px; font-size:13px; }
-    .pill-ok { background: rgba(16,185,129,.15); color:#34d399; border:1px solid rgba(16,185,129,.35); }
-    .pill-err { background: rgba(239,68,68,.15); color:#fca5a5; border:1px solid rgba(239,68,68,.35); }
-    .tabs { display:flex; gap:10px; margin-top:22px; }
-    .tab { padding:10px 14px; border-radius:12px; background: rgba(148,163,184,.12); color:#cbd5e1; cursor:pointer; font-weight:600; transition:.18s; }
-    .tab.active { background: linear-gradient(135deg, rgba(37,99,235,.35), rgba(29,78,216,.35)); color:#fff; }
-    .panels { margin-top:18px; }
-    .panel { display:none; }
-    .panel.active { display:block; }
-    .panel-grid { display:grid; grid-template-columns: 1.1fr .9fr; gap:18px; }
-    form { background: linear-gradient(180deg, rgba(12,20,36,.9), rgba(12,20,36,.6)); border: 1px solid rgba(148,163,184,.12); border-radius:16px; padding:16px; }
-    .form-row { display:grid; grid-template-columns: repeat(2, minmax(240px,1fr)); gap:12px; }
-    label { font-size:13px; color:#94a3b8; }
-    input, select { width:100%; margin-top:6px; padding:10px 12px; border-radius:12px; border:1px solid rgba(148,163,184,.22); background:#0b1222; color:var(--text); outline:none; transition:.16s; }
-    input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.2); }
-    .form-actions { margin-top:12px; display:flex; gap:10px; }
-    .status { margin-top:8px; font-size:13px; color:#cbd5e1; }
-    .table-card { background: linear-gradient(180deg, rgba(11,18,34,.9), rgba(11,18,34,.6)); border: 1px solid rgba(148,163,184,.12); border-radius:16px; padding:12px; }
-    table { width:100%; border-collapse: collapse; }
-    thead th { position:sticky; top:0; background: rgba(2,8,23,.8); color:#cbd5e1; font-weight:600; }
-    th, td { border-bottom:1px solid rgba(148,163,184,.1); padding:10px; text-align:left; font-size:13px; }
-    tbody tr:hover { background: rgba(148,163,184,.08); }
-    .hidden { display:none; }
-    .toast { position: fixed; left:50%; transform: translateX(-50%); bottom:24px; background: #0b1222; color:#fff; border:1px solid rgba(148,163,184,.2); border-radius:999px; padding:10px 16px; box-shadow:0 10px 30px rgba(0,0,0,.35); z-index:9999; opacity:0; pointer-events:none; transition:.22s; }
-    .toast.show { opacity:1; pointer-events:auto; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: #f5f7fa; margin: 0; padding: 0; }
+    .header { background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; }
+    .logo { font-weight: bold; font-size: 20px; color: #2d3748; }
+    .nav { display: flex; gap: 24px; }
+    .nav a { text-decoration: none; color: #4a5568; font-weight: 500; padding: 8px 16px; border-radius: 6px; transition: all 0.2s; }
+    .nav a:hover, .nav a.active { background: #ebf4ff; color: #4299e1; }
+    .container { max-width: 1200px; margin: 24px auto; padding: 0 24px; }
+    .card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 24px; margin-bottom: 24px; }
+    h2 { margin-top: 0; color: #2d3748; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 12px; border-bottom: 1px solid #e2e8f0; }
+    th { background: #f7fafc; font-weight: 600; color: #4a5568; }
+    .btn { padding: 8px 16px; border-radius: 6px; border: none; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+    .btn-primary { background: #4299e1; color: white; }
+    .btn-danger { background: #e53e3e; color: white; }
+    .btn-success { background: #38a169; color: white; }
+    .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; margin-bottom: 8px; font-weight: 500; color: #4a5568; }
+    input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 16px; }
+    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+    .modal-content { background: white; margin: 10% auto; padding: 24px; border-radius: 8px; width: 80%; max-width: 500px; }
+    .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+    .close:hover { color: black; }
+    .alert { padding: 12px; border-radius: 6px; margin: 16px 0; }
+    .alert-success { background: #c6f6d5; color: #22543d; border: 1px solid #9ae6b4; }
+    .alert-error { background: #fed7d7; color: #742a2a; border: 1px solid #feb2b2; }
+    .hidden { display: none; }
+    .fade-out {
+      opacity: 0;
+      transition: opacity 0.5s ease-out;
+    }
   </style>
-  <script>
-    let activeTab = 'branches'
-    let toastTimer
-    async function api(path, method, body) {
-      const headers = { 'Content-Type': 'application/json' }
-      if (window.csrfToken) headers['X-CSRF-Token'] = window.csrfToken
-      const res = await fetch(path, { method, headers, credentials: 'same-origin', body: body ? JSON.stringify(body) : undefined })
-      const json = await res.json()
-      return { status: res.status, json }
-    }
-    function toast(msg) {
-      const el = document.getElementById('toast')
-      el.textContent = msg
-      el.classList.add('show')
-      clearTimeout(toastTimer)
-      toastTimer = setTimeout(() => el.classList.remove('show'), 2200)
-    }
-    function setStatus(id, ok, msg) {
-      const el = document.getElementById(id)
-      el.textContent = msg
-      el.className = 'status ' + (ok ? 'pill-ok' : 'pill-err')
-      toast(msg)
-    }
-    async function logout() {
-      const r = await api('/logout', 'POST')
-      if (r.status === 200) {
-        location.href = '/'
-      }
-    }
-    function activateTab(name) {
-      activeTab = name
-      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name))
-      document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name))
-    }
-    async function loadConfig() {
-      const r = await fetch('/db-config', { credentials: 'same-origin' })
-      const j = await r.json()
-      const el = document.getElementById('cfg')
-      el.innerHTML = `连接配置：<b>${j.host}:${j.port}</b> / <b>${j.database}</b> / <b>${j.user}</b> / 密码${j.has_password ? '已设置' : '未设置'}`
-    }
-    async function initDb() {
-      const r = await api('/init-db', 'POST')
-      setStatus('initStatus', r.status === 200, r.status === 200 ? '初始化完成' : '初始化失败: ' + r.json.error)
-    }
-    async function health() {
-      const r = await fetch('/health', { credentials: 'same-origin' })
-      const j = await r.json()
-      const el = document.getElementById('health')
-      el.textContent = j.ok ? '数据库连接正常' : '数据库连接失败: ' + j.error
-      el.className = 'pill ' + (j.ok ? 'pill-ok' : 'pill-err')
-      toast(el.textContent)
-    }
-    async function submitBranch(e) {
-      e.preventDefault()
-      const union_no = document.getElementById('b_union').value
-      const name = document.getElementById('b_name').value
-      const city = document.getElementById('b_city').value
-      const r = await api('/branches', 'POST', { union_no, name, city })
-      setStatus('b_status', r.status === 200, r.status === 200 ? '支行已创建' : r.json.error)
-      loadBranches()
-    }
-    async function submitEmployee(e) {
-      e.preventDefault()
-      const name = document.getElementById('e_name').value
-      const phone = document.getElementById('e_phone').value
-      const hire_date = document.getElementById('e_hire_date').value
-      const manager_id = document.getElementById('e_manager_id').value || null
-      const r = await api('/employees', 'POST', { name, phone, hire_date, manager_id })
-      setStatus('e_status', r.status === 200, r.status === 200 ? '员工已创建' : r.json.error)
-      loadEmployees()
-    }
-    async function submitDependent(e) {
-      e.preventDefault()
-      const employee_id = document.getElementById('d_emp_id').value
-      const name = document.getElementById('d_name').value
-      const relationship = document.getElementById('d_rel').value
-      const r = await api('/dependents', 'POST', { employee_id, name, relationship })
-      setStatus('d_status', r.status === 200, r.status === 200 ? '家属已添加' : r.json.error)
-    }
-    async function submitCustomer(e) {
-      e.preventDefault()
-      const name = document.getElementById('c_name').value
-      const identity_no = document.getElementById('c_idno').value
-      const city = document.getElementById('c_city').value
-      const street = document.getElementById('c_street').value
-      const assistant_employee_id = document.getElementById('c_assist').value || null
-      const r = await api('/customers', 'POST', { name, identity_no, city, street, assistant_employee_id })
-      setStatus('c_status', r.status === 200, r.status === 200 ? '客户已创建' : r.json.error)
-      loadCustomers()
-    }
-    function showTypeFields() {
-      const type = document.getElementById('a_type').value
-      document.getElementById('savings_fields').style.display = type === 'savings' ? 'grid' : 'none'
-      document.getElementById('checking_fields').style.display = type === 'checking' ? 'grid' : 'none'
-    }
-    async function submitAccount(e) {
-      e.preventDefault()
-      const account_no = document.getElementById('a_no').value
-      const balance = document.getElementById('a_bal').value
-      const type = document.getElementById('a_type').value
-      const customer_id = document.getElementById('a_owner').value || null
-      const body = { account_no, balance, type, customer_id }
-      if (type === 'savings') body.interest_rate = document.getElementById('a_rate').value
-      if (type === 'checking') body.overdraft_limit = document.getElementById('a_od').value
-      const r = await api('/accounts', 'POST', body)
-      setStatus('a_status', r.status === 200, r.status === 200 ? '账户已创建' : r.json.error)
-      loadAccounts()
-    }
-    async function submitAccountOwner(e) {
-      e.preventDefault()
-      const account_id = document.getElementById('ao_account').value
-      const customer_id = document.getElementById('ao_cust').value
-      const r = await api('/account_owners', 'POST', { account_id, customer_id })
-      setStatus('ao_status', r.status === 200, r.status === 200 ? '账户所有者已添加' : r.json.error)
-    }
-    async function submitLoan(e) {
-      e.preventDefault()
-      const loan_no = document.getElementById('l_no').value
-      const amount = document.getElementById('l_amt').value
-      const branch_id = document.getElementById('l_branch').value
-      const ids = document.getElementById('l_custs').value
-      const customer_ids = ids ? ids.split(',').map(x => parseInt(x.trim())).filter(x => !isNaN(x)) : []
-      const r = await api('/loans', 'POST', { loan_no, amount, branch_id, customer_ids })
-      setStatus('l_status', r.status === 200, r.status === 200 ? '贷款已创建' : r.json.error)
-      loadLoans()
-    }
-    async function submitRepayment(e) {
-      e.preventDefault()
-      const loan_id = document.getElementById('r_loan').value
-      const batch_no = document.getElementById('r_batch').value
-      const paid_at = document.getElementById('r_date').value
-      const amount = document.getElementById('r_amt').value
-      const savings_account_id = document.getElementById('r_sa').value
-      const r = await api('/repayments', 'POST', { loan_id, batch_no, paid_at, amount, savings_account_id })
-      setStatus('r_status', r.status === 200, r.status === 200 ? '还款已记录' : r.json.error)
-      loadRepayments()
-    }
-    async function loadBranches() { const r = await fetch('/branches', { credentials:'same-origin' }); renderTable('branches_tbl', await r.json()) }
-    async function loadEmployees() { const r = await fetch('/employees', { credentials:'same-origin' }); renderTable('employees_tbl', await r.json()) }
-    async function loadCustomers() { const r = await fetch('/customers', { credentials:'same-origin' }); renderTable('customers_tbl', await r.json()) }
-    async function loadAccounts() { const r = await fetch('/accounts', { credentials:'same-origin' }); renderTable('accounts_tbl', await r.json()) }
-    async function loadLoans() { const r = await fetch('/loans', { credentials:'same-origin' }); renderTable('loans_tbl', await r.json()) }
-    async function loadRepayments() { const r = await fetch('/repayments', { credentials:'same-origin' }); renderTable('repayments_tbl', await r.json()) }
-    function renderTable(id, rows) {
-      const el = document.getElementById(id)
-      if (!rows.length) { el.innerHTML = '<thead><tr><th>无数据</th></tr></thead>'; return }
-      const keys = Object.keys(rows[0])
-      const thead = '<thead><tr>' + keys.map(k => '<th>' + k + '</th>').join('') + '</tr></thead>'
-      const tbody = '<tbody>' + rows.map(r => '<tr>' + keys.map(k => '<td>' + (r[k] ?? '') + '</td>').join('') + '</tr>').join('') + '</tbody>'
-      el.innerHTML = thead + tbody
-    }
-    window.addEventListener('load', async () => {
-      try {
-        const r = await fetch('/csrf-token', { credentials: 'same-origin' })
-        const j = await r.json()
-        window.csrfToken = j.token
-      } catch {}
-      health(); loadConfig(); activateTab('branches')
-      loadBranches(); loadEmployees(); loadCustomers(); loadAccounts(); loadLoans(); loadRepayments(); showTypeFields()
-      document.querySelectorAll('.tab').forEach(btn => btn.addEventListener('click', () => activateTab(btn.dataset.tab)))
-      document.getElementById('branch_form').addEventListener('submit', submitBranch)
-      const buf = document.getElementById('branch_update_form')
-      if (buf) {
-        buf.addEventListener('submit', async (e) => {
-          e.preventDefault()
-          const id = document.getElementById('bu_id').value
-          const name = document.getElementById('bu_name').value
-          const city = document.getElementById('bu_city').value
-          const r = await api('/branches/update', 'POST', { id, name, city })
-          setStatus('bu_status', r.status === 200, r.status === 200 ? '支行已更新' : '更新失败')
-          loadBranches()
-        })
-      }
-      const bdf = document.getElementById('branch_delete_form')
-      if (bdf) {
-        bdf.addEventListener('submit', async (e) => {
-          e.preventDefault()
-          const id = document.getElementById('bd_id').value
-          const r = await api('/branches/delete', 'POST', { id })
-          setStatus('bd_status2', r.status === 200, r.status === 200 ? '支行已删除' : '删除失败')
-          loadBranches()
-        })
-      }
-      document.getElementById('emp_form').addEventListener('submit', submitEmployee)
-      document.getElementById('dep_form').addEventListener('submit', submitDependent)
-      document.getElementById('cust_form').addEventListener('submit', submitCustomer)
-      document.getElementById('account_form').addEventListener('submit', submitAccount)
-      document.getElementById('ao_form').addEventListener('submit', submitAccountOwner)
-      document.getElementById('loan_form').addEventListener('submit', submitLoan)
-      document.getElementById('repay_form').addEventListener('submit', submitRepayment)
-      const qf = document.getElementById('query_form')
-      if (qf) {
-        qf.addEventListener('submit', async (e) => {
-          e.preventDefault()
-          const name = document.getElementById('q_name').value
-          const city = document.getElementById('q_city').value
-          const idno = document.getElementById('q_idno').value
-          const size = document.getElementById('q_size').value
-          const page = document.getElementById('q_page').value
-          const u = `/admin/query/customers?name=${encodeURIComponent(name)}&city=${encodeURIComponent(city)}&idno=${encodeURIComponent(idno)}&size=${encodeURIComponent(size)}&page=${encodeURIComponent(page)}`
-          const r = await fetch(u, { credentials:'same-origin' })
-          const rows = await r.json()
-          renderTable('query_tbl', rows)
-        })
-        document.getElementById('q_export').addEventListener('click', async () => {
-          const name = document.getElementById('q_name').value
-          const city = document.getElementById('q_city').value
-          const idno = document.getElementById('q_idno').value
-          const u = `/admin/export/customers?name=${encodeURIComponent(name)}&city=${encodeURIComponent(city)}&idno=${encodeURIComponent(idno)}`
-          const r = await fetch(u, { credentials:'same-origin' })
-          const t = await r.text()
-          const blob = new Blob([t], { type:'text/csv' })
-          const a = document.createElement('a')
-          a.href = URL.createObjectURL(blob)
-          a.download = 'customers.csv'
-          a.click()
-        })
-        document.getElementById('bd_get').addEventListener('click', async () => {
-          const r = await api('/admin/sensitive/start', 'POST')
-          if (r.status === 200) { document.getElementById('bd_code').value = r.json.code; setStatus('bd_status', true, '已生成验证代码') } else { setStatus('bd_status', false, '生成验证代码失败') }
-        })
-        document.getElementById('batch_del_form').addEventListener('submit', async (e) => {
-          e.preventDefault()
-          const table = document.getElementById('bd_table').value
-          const ids = document.getElementById('bd_ids').value.split(',').map(x => parseInt(x.trim())).filter(x => !isNaN(x))
-          const code = document.getElementById('bd_code').value.trim()
-          const r = await api('/admin/batch/delete', 'POST', { table, ids, code })
-          setStatus('bd_status', r.status === 200, r.status === 200 ? '批量删除完成' : '批量删除失败')
-        })
-      }
-    })
-  </script>
+</style>
 </head>
 <body>
-  <div class="hero">
-    <div class="hero-inner">
-      <div class="brand"><div class="brand-badge">🏦</div>银行管理系统 - 管理员控制台</div>
-      <div class="actions">
-        <button class="btn btn-primary" onclick="initDb()">初始化数据库</button>
-        <button class="btn btn-muted" onclick="health()">检查连接</button>
-        <button class="btn btn-muted" onclick="logout()">退出登录</button>
-      </div>
+  <div class="header">
+    <div class="logo">🏦 银行管理系统</div>
+    <div class="nav">
+      <a href="#" class="active" data-tab="dashboard">仪表盘</a>
+      <a href="#" data-tab="branches">分行</a>
+      <a href="#" data-tab="employees">员工</a>
+      <a href="#" data-tab="dependents">家属</a>
+      <a href="#" data-tab="customers">客户</a>
+      <a href="#" data-tab="accounts">账户</a>
+      <a href="#" data-tab="loans">贷款</a>
+      <a href="#" data-tab="approval">审批</a>
+      <a href="/login">退出</a>
     </div>
   </div>
+  
   <div class="container">
-    <div class="grid-cards">
-      <div class="card"><h3>连接配置</h3><div id="cfg" class="status"></div></div>
-      <div class="card"><h3>连接状态</h3><div id="health" class="pill"></div><div id="initStatus" class="status"></div></div>
-      <div class="card"><h3>说明</h3><div class="status">已使用本地配置文件 config.local.json 读取数据库连接信息。</div></div>
+    <!-- 仪表盘 -->
+    <div id="dashboard" class="tab-content">
+      <div class="card">
+        <h2>系统概览</h2>
+        <div id="stats">
+          <!-- 统计数据将通过JS加载 -->
+          加载中...
+        </div>
+      </div>
+      <div class="card">
+        <h2>快捷查询</h2>
+        <div style="display:flex; gap:12px; flex-wrap:wrap;">
+          <a class="btn btn-primary" href="/admin/query/branch">支行查询</a>
+          <a class="btn btn-primary" href="/admin/query/customer">客户查询</a>
+          <a class="btn btn-primary" href="/admin/query/account">账户查询</a>
+          <a class="btn btn-primary" href="/admin/query/employee">员工查询</a>
+          <a class="btn btn-primary" href="/admin/query/loan">贷款查询</a>
+        </div>
+      </div>
     </div>
-    <div class="tabs">
-      <div class="tab active" data-tab="branches">支行</div>
-      <div class="tab" data-tab="employees">员工与家属</div>
-      <div class="tab" data-tab="customers">客户</div>
-      <div class="tab" data-tab="accounts">账户</div>
-      <div class="tab" data-tab="loans">贷款</div>
-      <div class="tab" data-tab="repayments">还款</div>
-      <div class="tab" data-tab="query">查询</div>
+    
+    <!-- 分行管理 -->
+    <div id="branches" class="tab-content hidden">
+      <div class="card">
+        <h2>分行列表</h2>
+        <table id="branches-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>联行号</th>
+              <th>名称</th>
+              <th>城市</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h2>添加分行</h2>
+        <form id="branch-form">
+          <div class="form-group">
+            <label>联行号</label>
+            <input type="text" name="union_no" required>
+          </div>
+          <div class="form-group">
+            <label>名称</label>
+            <input type="text" name="name" required>
+          </div>
+          <div class="form-group">
+            <label>城市</label>
+            <input type="text" name="city" required>
+          </div>
+          <button type="submit" class="btn btn-primary">添加分行</button>
+        </form>
+        <div id="branch-form-alert" class="alert hidden"></div>
+        <div id="branch-alert" class="alert hidden"></div>
+      </div>
     </div>
-    <div class="panels">
-      <div class="panel panel-grid active" id="panel-branches">
-        <form id="branch_form">
-          <div class="form-row">
-            <div><label>联行号<input id="b_union" required></label></div>
-            <div><label>名称<input id="b_name" required></label></div>
-            <div><label>城市<input id="b_city" required></label></div>
-          </div>
-          <div class="form-actions"><button class="btn btn-primary" type="submit">创建支行</button></div>
-          <div id="b_status" class="status"></div>
-        </form>
-        <form id="branch_update_form" style="margin-top:18px">
-          <div class="form-row">
-            <div><label>支行ID<input id="bu_id" type="number" required></label></div>
-            <div><label>名称<input id="bu_name" required></label></div>
-            <div><label>城市<input id="bu_city" required></label></div>
-          </div>
-          <div class="form-actions"><button class="btn btn-primary" type="submit">更新支行</button></div>
-          <div id="bu_status" class="status"></div>
-        </form>
-        <form id="branch_delete_form" style="margin-top:12px">
-          <div class="form-row">
-            <div><label>支行ID<input id="bd_id" type="number" required></label></div>
-          </div>
-          <div class="form-actions"><button class="btn btn-primary" type="submit">删除支行</button></div>
-          <div id="bd_status2" class="status"></div>
-        </form>
-        <div class="table-card"><table id="branches_tbl"></table></div>
+    
+    <!-- 员工管理 -->
+    <div id="employees" class="tab-content hidden">
+      <div class="card">
+        <h2>员工列表</h2>
+        <table id="employees-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>姓名</th>
+              <th>电话</th>
+              <th>入职日期</th>
+              <th>上级ID</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
-      <div class="panel panel-grid" id="panel-employees">
-        <form id="emp_form">
-          <div class="form-row">
-            <div><label>姓名<input id="e_name" required></label></div>
-            <div><label>电话<input id="e_phone"></label></div>
-            <div><label>入职日期<input id="e_hire_date" type="date" required></label></div>
-            <div><label>经理ID<input id="e_manager_id" type="number"></label></div>
+      <div class="card">
+        <h2>添加员工</h2>
+        <form id="employee-form">
+          <div class="form-group">
+            <label>姓名</label>
+            <input type="text" name="name" required>
           </div>
-          <div class="form-actions"><button class="btn btn-primary" type="submit">创建员工</button></div>
-          <div id="e_status" class="status"></div>
-        </form>
-        <form id="dep_form">
-          <div class="form-row">
-            <div><label>员工ID<input id="d_emp_id" type="number" required></label></div>
-            <div><label>家属姓名<input id="d_name" required></label></div>
-            <div><label>关系<input id="d_rel" required></label></div>
+          <div class="form-group">
+            <label>电话</label>
+            <input type="text" name="phone">
           </div>
-          <div class="form-actions"><button class="btn btn-primary" type="submit">添加家属</button></div>
-          <div id="d_status" class="status"></div>
+          <div class="form-group">
+            <label>入职日期</label>
+            <input type="date" name="hire_date" required>
+          </div>
+          <div class="form-group">
+            <label>上级ID</label>
+            <input type="number" name="manager_id">
+          </div>
+          <button type="submit" class="btn btn-primary">添加员工</button>
         </form>
-        <div class="table-card"><table id="employees_tbl"></table></div>
+        <div id="employee-form-alert" class="alert hidden"></div>
+        <div id="employee-alert" class="alert hidden"></div>
       </div>
-      <div class="panel panel-grid" id="panel-customers">
-        <form id="cust_form">
-          <div class="form-row">
-            <div><label>姓名<input id="c_name" required></label></div>
-            <div><label>证件号<input id="c_idno" required></label></div>
-            <div><label>城市<input id="c_city" required></label></div>
-            <div><label>街道<input id="c_street" required></label></div>
-            <div><label>私人助理员工ID<input id="c_assist" type="number"></label></div>
-          </div>
-          <div class="form-actions"><button class="btn btn-primary" type="submit">创建客户</button></div>
-          <div id="c_status" class="status"></div>
-        </form>
-        <div class="table-card"><table id="customers_tbl"></table></div>
+    </div>
+    
+    <!-- 家属管理 -->
+    <div id="dependents" class="tab-content hidden">
+      <div class="card">
+        <h2>家属列表</h2>
+        <table id="dependents-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>员工ID</th>
+              <th>姓名</th>
+              <th>关系</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
-      <div class="panel panel-grid" id="panel-accounts">
-        <form id="account_form">
-          <div class="form-row">
-            <div><label>账户号<input id="a_no" required></label></div>
-            <div><label>初始余额<input id="a_bal" type="number" value="0"></label></div>
-            <div><label>类型<select id="a_type" onchange="showTypeFields()"><option value="savings">储蓄</option><option value="checking">支票</option></select></label></div>
+      <div class="card">
+        <h2>添加家属</h2>
+        <form id="dependent-form">
+          <div class="form-group">
+            <label>员工ID</label>
+            <input type="number" name="employee_id" required>
           </div>
-          <div class="form-row" id="savings_fields">
-            <div><label>利率<input id="a_rate" type="number" step="0.0001" value="0.01"></label></div>
+          <div class="form-group">
+            <label>姓名</label>
+            <input type="text" name="name" required>
           </div>
-          <div class="form-row" id="checking_fields" style="display:none">
-            <div><label>可透支额度<input id="a_od" type="number" value="0"></label></div>
+          <div class="form-group">
+            <label>关系</label>
+            <input type="text" name="relationship" required>
           </div>
-          <div class="form-row">
-            <div><label>初始所有者客户ID<input id="a_owner" type="number"></label></div>
-          </div>
-          <div class="form-actions"><button class="btn btn-primary" type="submit">创建账户</button></div>
-          <div id="a_status" class="status"></div>
+          <button type="submit" class="btn btn-primary">添加家属</button>
         </form>
-        <form id="ao_form">
-          <div class="form-row">
-            <div><label>账户ID<input id="ao_account" type="number" required></label></div>
-            <div><label>客户ID<input id="ao_cust" type="number" required></label></div>
-          </div>
-          <div class="form-actions"><button class="btn btn-primary" type="submit">添加账户所有者</button></div>
-          <div id="ao_status" class="status"></div>
-        </form>
-        <div class="table-card"><table id="accounts_tbl"></table></div>
+        <div id="dependent-form-alert" class="alert hidden"></div>
+        <div id="dependent-alert" class="alert hidden"></div>
       </div>
-      <div class="panel panel-grid" id="panel-loans">
-        <form id="loan_form">
-          <div class="form-row">
-            <div><label>贷款号<input id="l_no" required></label></div>
-            <div><label>金额<input id="l_amt" type="number" required></label></div>
-            <div><label>发放支行ID<input id="l_branch" type="number" required></label></div>
-            <div><label>所有者客户ID列表(逗号分隔)<input id="l_custs"></label></div>
-          </div>
-          <div class="form-actions"><button class="btn btn-primary" type="submit">创建贷款</button></div>
-          <div id="l_status" class="status"></div>
-        </form>
-        <div class="table-card"><table id="loans_tbl"></table></div>
+    </div>
+    
+    <!-- 客户管理 -->
+    <div id="customers" class="tab-content hidden">
+      <div class="card">
+        <h2>客户列表</h2>
+        <table id="customers-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>姓名</th>
+              <th>身份证号</th>
+              <th>城市</th>
+              <th>街道</th>
+              <th>助理员工ID</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
-      <div class="panel panel-grid" id="panel-repayments">
-        <form id="repay_form">
-          <div class="form-row">
-            <div><label>贷款ID<input id="r_loan" type="number" required></label></div>
-            <div><label>批次<input id="r_batch" type="number" required></label></div>
-            <div><label>日期<input id="r_date" type="date" required></label></div>
-            <div><label>金额<input id="r_amt" type="number" required></label></div>
-            <div><label>储蓄账户ID<input id="r_sa" type="number" required></label></div>
+      <div class="card">
+        <h2>添加客户</h2>
+        <form id="customer-form">
+          <div class="form-group">
+            <label>姓名</label>
+            <input type="text" name="name" required>
           </div>
-          <div class="form-actions"><button class="btn btn-primary" type="submit">记录还款</button></div>
-          <div id="r_status" class="status"></div>
+          <div class="form-group">
+            <label>身份证号</label>
+            <input type="text" name="identity_no" required>
+          </div>
+          <div class="form-group">
+            <label>城市</label>
+            <input type="text" name="city" required>
+          </div>
+          <div class="form-group">
+            <label>街道</label>
+            <input type="text" name="street" required>
+          </div>
+          <div class="form-group">
+            <label>助理员工ID</label>
+            <input type="number" name="assistant_employee_id">
+          </div>
+          <button type="submit" class="btn btn-primary">添加客户</button>
         </form>
-        <div class="table-card"><table id="repayments_tbl"></table></div>
+        <div id="customer-form-alert" class="alert hidden"></div>
+        <div id="customer-alert" class="alert hidden"></div>
       </div>
-      <div class="panel panel-grid" id="panel-query">
-        <form id="query_form">
-          <div class="form-row">
-            <div><label>姓名包含<input id="q_name"></label></div>
-            <div><label>城市包含<input id="q_city"></label></div>
-            <div><label>证件号包含<input id="q_idno"></label></div>
-            <div><label>每页条数<input id="q_size" type="number" value="10"></label></div>
-            <div><label>页码<input id="q_page" type="number" value="1"></label></div>
+    </div>
+    
+    <!-- 账户管理 -->
+    <div id="accounts" class="tab-content hidden">
+      <div class="card">
+        <h2>账户列表</h2>
+        <table id="accounts-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>账户号</th>
+              <th>创建时间</th>
+              <th>余额</th>
+              <th>类型</th>
+              <th>利率/透支额度</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h2>创建账户</h2>
+        <form id="account-form">
+          <div class="form-group">
+            <label>账户号</label>
+            <input type="text" name="account_no" required>
           </div>
-          <div class="form-actions">
-            <button class="btn btn-primary" type="submit">查询客户</button>
-            <button class="btn btn-muted" type="button" id="q_export">导出CSV</button>
+          <div class="form-group">
+            <label>余额</label>
+            <input type="number" name="balance" step="0.01" value="0">
           </div>
+          <div class="form-group">
+            <label>类型</label>
+            <select name="type" required>
+              <option value="savings">储蓄账户</option>
+              <option value="checking">支票账户</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>客户ID</label>
+            <input type="number" name="customer_id">
+          </div>
+          <div class="form-group savings-fields">
+            <label>利率</label>
+            <input type="number" name="interest_rate" step="0.0001" value="0.02">
+          </div>
+          <div class="form-group checking-fields hidden">
+            <label>透支额度</label>
+            <input type="number" name="overdraft_limit" step="0.01" value="0">
+          </div>
+          <button type="submit" class="btn btn-primary">创建账户</button>
         </form>
-        <div class="table-card"><table id="query_tbl"></table></div>
-        <form id="batch_del_form" style="margin-top:18px">
-          <div class="form-row">
-            <div><label>数据表<select id="bd_table"><option value="branch">支行</option><option value="employee">员工</option><option value="customer">客户</option><option value="account">账户</option><option value="loan">贷款</option><option value="repayment">还款</option></select></label></div>
-            <div><label>ID列表(逗号分隔)<input id="bd_ids" required></label></div>
-            <div><label>验证代码<input id="bd_code" required placeholder="点击获取"></label></div>
+        <div id="account-form-alert" class="alert hidden"></div>
+        <div id="account-alert" class="alert hidden"></div>
+      </div>
+    </div>
+
+    <!-- 贷款管理 -->
+    <div id="loans" class="tab-content hidden">
+      <div class="card">
+        <h2>贷款列表</h2>
+        <table id="loans-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>贷款号</th>
+              <th>金额</th>
+              <th>发放分行ID</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h2>创建贷款</h2>
+        <form id="loan-form">
+          <div class="form-group">
+            <label>贷款号</label>
+            <input type="text" name="loan_no" required>
           </div>
-          <div class="form-actions">
-            <button class="btn btn-muted" type="button" id="bd_get">获取验证代码</button>
-            <button class="btn btn-primary" type="submit">批量删除</button>
+          <div class="form-group">
+            <label>贷款金额</label>
+            <input type="number" name="amount" step="0.01" min="0.01" required>
           </div>
-          <div id="bd_status" class="status"></div>
+          <div class="form-group">
+            <label>发放分行ID</label>
+            <input type="number" name="branch_id" required>
+          </div>
+          <div class="form-group">
+            <label>关联客户ID列表（逗号分隔）</label>
+            <input type="text" name="customer_ids" placeholder="如：1,2,3" required>
+          </div>
+          <button type="submit" class="btn btn-primary">创建贷款</button>
         </form>
+        <div id="loan-form-alert" class="alert hidden"></div>
+        <div id="loan-alert" class="alert hidden"></div>
+      </div>
+    </div>
+    
+    <!-- 审批管理 -->
+    <div id="approval" class="tab-content hidden">
+      <div class="card">
+        <h2>账户注销申请审批</h2>
+        <table id="approval-table">
+          <thead>
+            <tr>
+              <th>申请ID</th>
+              <th>客户姓名</th>
+              <th>申请详情</th>
+              <th>申请时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h2>审批操作</h2>
+        <form id="approval-form">
+          <input type="hidden" id="approval-business-id">
+          <div class="form-group">
+            <label>审批意见</label>
+            <textarea id="approval-remark" placeholder="请输入审批意见"></textarea>
+          </div>
+          <button type="button" class="btn btn-success" onclick="approveCloseAccount('APPROVE')">批准</button>
+          <button type="button" class="btn btn-danger" onclick="approveCloseAccount('REJECT')">拒绝</button>
+        </form>
+        <div id="approval-alert" class="alert hidden"></div>
       </div>
     </div>
   </div>
-  <div id="toast" class="toast"></div>
+
+  <script>
+    let csrfToken
+    let activeTab = 'dashboard'
+    
+    // 获取CSRF Token
+    async function getCsrf() {
+      const r = await fetch('/csrf-token')
+      const j = await r.json()
+      csrfToken = j.token
+    }
+    
+    // 切换标签页
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => {
+        el.classList.add('hidden')
+      })
+      document.querySelectorAll('.nav a').forEach(el => {
+        el.classList.remove('active')
+      })
+      document.getElementById(tabId).classList.remove('hidden')
+      document.querySelector(`[data-tab="${tabId}"]`).classList.add('active')
+      activeTab = tabId
+      
+      // 加载对应标签页的数据
+      switch(tabId) {
+        case 'dashboard':
+          loadStats()
+          break
+        case 'branches':
+          loadBranches()
+          break
+        case 'employees':
+          loadEmployees()
+          break
+        case 'dependents':
+          loadDependents()
+          break
+        case 'customers':
+          loadCustomers()
+          break
+        case 'accounts':
+          loadAccounts()
+          break
+        case 'loans':
+          loadLoans()
+          break
+        case 'approval':
+          loadPendingApprovals()
+          break
+      }
+    }
+    
+    // 加载统计数据
+    async function loadStats() {
+      try {
+        const [branchRes, empRes, custRes, accRes] = await Promise.all([
+          fetch('/branches'),
+          fetch('/employees'),
+          fetch('/customers'),
+          fetch('/accounts')
+        ])
+        
+        const branches = await branchRes.json()
+        const employees = await empRes.json()
+        const customers = await custRes.json()
+        const accounts = await accRes.json()
+        
+        document.getElementById('stats').innerHTML = `
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px;">
+            <div style="background: #ebf8ff; padding: 20px; border-radius: 8px; text-align: center;">
+              <div style="font-size: 24px; font-weight: bold; color: #3182ce;">${branches.length}</div>
+              <div style="color: #4a5568;">分行数量</div>
+            </div>
+            <div style="background: #f0fff4; padding: 20px; border-radius: 8px; text-align: center;">
+              <div style="font-size: 24px; font-weight: bold; color: #38a169;">${employees.length}</div>
+              <div style="color: #4a5568;">员工数量</div>
+            </div>
+            <div style="background: #fffbeb; padding: 20px; border-radius: 8px; text-align: center;">
+              <div style="font-size: 24px; font-weight: bold; color: #d69e2e;">${customers.length}</div>
+              <div style="color: #4a5568;">客户数量</div>
+            </div>
+            <div style="background: #f7fafc; padding: 20px; border-radius: 8px; text-align: center;">
+              <div style="font-size: 24px; font-weight: bold; color: #4a5568;">${accounts.length}</div>
+              <div style="color: #4a5568;">账户数量</div>
+            </div>
+          </div>
+        `
+      } catch (e) {
+        console.error('加载统计数据失败:', e)
+        showAlert('stats', '加载统计数据失败: ' + e.message, 'error')
+      }
+    }
+    
+    // 加载分行数据
+    async function loadBranches() {
+      try {
+        const r = await fetch('/branches')
+        const branches = await r.json()
+        const tbody = document.querySelector('#branches-table tbody')
+        tbody.innerHTML = branches.map(b => `
+          <tr>
+            <td>${b.id}</td>
+            <td>${b.union_no}</td>
+            <td>${b.name}</td>
+            <td>${b.city}</td>
+          </tr>
+        `).join('')
+      } catch (e) {
+        console.error('加载分行数据失败:', e)
+        showAlert('branch', '加载分行数据失败: ' + e.message, 'error')
+      }
+    }
+    
+    // 加载员工数据
+    async function loadEmployees() {
+      try {
+        const r = await fetch('/employees')
+        const employees = await r.json()
+        const tbody = document.querySelector('#employees-table tbody')
+        tbody.innerHTML = employees.map(e => `
+          <tr>
+            <td>${e.id}</td>
+            <td>${e.name}</td>
+            <td>${e.phone || ''}</td>
+            <td>${e.hire_date}</td>
+            <td>${e.manager_id || ''}</td>
+          </tr>
+        `).join('')
+      } catch (e) {
+        console.error('加载员工数据失败:', e)
+        showAlert('employee', '加载员工数据失败: ' + e.message, 'error')
+      }
+    }
+    
+    // 加载家属数据
+    async function loadDependents() {
+      try {
+        const r = await fetch('/dependents')
+        if (!r.ok) {
+          throw new Error(`HTTP error! status: ${r.status}`)
+        }
+        const dependents = await r.json()
+        const tbody = document.querySelector('#dependents-table tbody')
+        tbody.innerHTML = dependents.map(d => `
+          <tr>
+            <td>${d.id}</td>
+            <td>${d.employee_id}</td>
+            <td>${d.name}</td>
+            <td>${d.relationship}</td>
+          </tr>
+        `).join('')
+      } catch (e) {
+        console.error('加载家属数据失败:', e)
+        showAlert('dependent', '加载家属数据失败: ' + (e.message || e), 'error')
+      }
+    }
+    
+    // 加载客户数据
+    async function loadCustomers() {
+      try {
+        const r = await fetch('/customers')
+        const customers = await r.json()
+        const tbody = document.querySelector('#customers-table tbody')
+        tbody.innerHTML = customers.map(c => `
+          <tr>
+            <td>${c.id}</td>
+            <td>${c.name}</td>
+            <td>${c.identity_no}</td>
+            <td>${c.city}</td>
+            <td>${c.street}</td>
+            <td>${c.assistant_employee_id || ''}</td>
+          </tr>
+        `).join('')
+      } catch (e) {
+        console.error('加载客户数据失败:', e)
+        showAlert('customer', '加载客户数据失败: ' + e.message, 'error')
+      }
+    }
+    
+    // 加载账户数据
+    async function loadAccounts() {
+      try {
+        const r = await fetch('/accounts')
+        const accounts = await r.json()
+        const tbody = document.querySelector('#accounts-table tbody')
+        tbody.innerHTML = accounts.map(a => `
+          <tr>
+            <td>${a.id}</td>
+            <td>${a.account_no}</td>
+            <td>${new Date(a.created_at).toLocaleDateString()}</td>
+            <td>¥${parseFloat(a.balance).toFixed(2)}</td>
+            <td>${a.type}</td>
+            <td>${a.type === 'savings' ? `利率: ${(a.interest_rate * 100).toFixed(2)}%` : `透支: ¥${parseFloat(a.overdraft_limit || 0).toFixed(2)}`}</td>
+          </tr>
+        `).join('')
+      } catch (e) {
+        console.error('加载账户数据失败:', e)
+        showAlert('account', '加载账户数据失败: ' + e.message, 'error')
+      }
+    }
+
+    // 加载贷款数据
+    async function loadLoans() {
+      try {
+        const r = await fetch('/loans')
+        const loans = await r.json()
+        const tbody = document.querySelector('#loans-table tbody')
+        tbody.innerHTML = loans.map(l => `
+          <tr>
+            <td>${l.id}</td>
+            <td>${l.loan_no}</td>
+            <td>¥${parseFloat(l.amount).toFixed(2)}</td>
+            <td>${l.branch_id}</td>
+          </tr>
+        `).join('')
+      } catch (e) {
+        console.error('加载贷款数据失败:', e)
+        showAlert('loan', '加载贷款数据失败: ' + e.message, 'error')
+      }
+    }
+    
+    // 加载待审批数据
+    async function loadPendingApprovals() {
+      try {
+        const r = await fetch('/admin/pending-close-accounts')
+        const approvals = await r.json()
+        const tbody = document.querySelector('#approval-table tbody')
+        tbody.innerHTML = approvals.map(a => `
+          <tr>
+            <td>${a.business_id}</td>
+            <td>${a.customer_name}</td>
+            <td>${a.remark}</td>
+            <td>${new Date(a.created_at).toLocaleString()}</td>
+            <td>
+              <button class="btn btn-primary" onclick="selectApproval(${a.business_id})">处理</button>
+            </td>
+          </tr>
+        `).join('')
+      } catch (e) {
+        console.error('加载审批数据失败:', e)
+        showAlert('approval', '加载审批数据失败: ' + e.message, 'error')
+      }
+    }
+    
+    // 选择审批项
+    function selectApproval(businessId) {
+      document.getElementById('approval-business-id').value = businessId
+      document.getElementById('approval-remark').value = ''
+      document.getElementById('approval-alert').classList.add('hidden')
+    }
+    
+    // 审批账户注销申请
+    async function approveCloseAccount(action) {
+      const businessId = document.getElementById('approval-business-id').value
+      const remark = document.getElementById('approval-remark').value
+      
+      if (!businessId) {
+        showAlert('approval', '请选择要处理的申请', 'error')
+        return
+      }
+      
+      try {
+        const r = await fetch('/admin/approve-close-account', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken
+          },
+          body: JSON.stringify({ business_id: businessId, action: action, remark: remark })
+        })
+        
+        const j = await r.json()
+        if (r.ok) {
+          showAlert('approval', j.message, 'success')
+          loadPendingApprovals()
+          // 3秒后清除成功消息
+          setTimeout(() => {
+            document.getElementById('approval-alert').classList.add('hidden');
+            document.getElementById('approval-alert').classList.remove('fade-out');
+          }, 3000);
+        } else {
+          showAlert('approval', j.error, 'error')
+        }
+      } catch (e) {
+        showAlert('approval', '审批失败: ' + e.message, 'error')
+      }
+    }
+    
+    // 显示提示信息
+    function showAlert(formId, message, type) {
+      const alertEl = document.getElementById(`${formId}-alert`)
+      if (!alertEl) {
+        console.error('找不到提示元素:', `${formId}-alert`)
+        return
+      }
+      
+      alertEl.className = `alert alert-${type}`
+      alertEl.textContent = message
+      alertEl.classList.remove('hidden')
+      alertEl.classList.remove('fade-out')
+      
+      // 成功消息3秒后淡出
+      if (type === 'success') {
+        setTimeout(() => {
+          alertEl.classList.add('fade-out')
+          setTimeout(() => {
+            alertEl.classList.add('hidden')
+          }, 500)
+        }, 3000)
+      }
+    }
+    
+    // 表单提交处理
+    async function handleSubmit(formId, url, successMsg) {
+      const form = document.getElementById(formId)
+      const formData = new FormData(form)
+      const data = {}
+      const fields = Array.from(form.elements).filter(el => el.name)
+      for (let [key, value] of formData.entries()) {
+        if (value !== '') {
+          const el = fields.find(e => e.name === key)
+          if (el && el.type === 'number') {
+            data[key] = value.includes('.') ? parseFloat(value) : parseInt(value)
+          } else {
+            data[key] = value
+          }
+        }
+      }
+
+      // 特殊字段处理：逗号分隔的客户ID列表
+      if (typeof data.customer_ids === 'string') {
+        data.customer_ids = data.customer_ids
+          .split(',')
+          .map(s => s.trim())
+          .filter(s => s.length > 0)
+          .map(s => parseInt(s))
+          .filter(n => !Number.isNaN(n))
+      }
+      
+      try {
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken
+          },
+          body: JSON.stringify(data)
+        })
+        
+        const j = await r.json()
+        if (r.ok) {
+          showAlert(formId, successMsg, 'success')
+          form.reset()
+          // 重新加载对应的数据
+          switch(formId) {
+            case 'branch-form':
+              loadBranches()
+              break
+            case 'employee-form':
+              loadEmployees()
+              break
+            case 'dependent-form':
+              loadDependents()
+              break
+            case 'customer-form':
+              loadCustomers()
+              break
+            case 'account-form':
+              loadAccounts()
+              break
+            case 'loan-form':
+              loadLoans()
+              break
+          }
+        } else {
+          showAlert(formId, j.error || '操作失败', 'error')
+        }
+      } catch (e) {
+        showAlert(formId, '操作失败: ' + e.message, 'error')
+      }
+    }
+    
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', async () => {
+      await getCsrf()
+      loadStats()
+      
+      // 绑定导航点击事件
+      document.querySelectorAll('.nav a[data-tab]').forEach(link => {
+        link.addEventListener('click', (e) => {
+          e.preventDefault()
+          switchTab(e.target.dataset.tab)
+        })
+      })
+      
+      // 绑定表单提交事件
+      document.getElementById('branch-form').addEventListener('submit', (e) => {
+        e.preventDefault()
+        handleSubmit('branch-form', '/branches', '分行添加成功')
+      })
+      
+      document.getElementById('employee-form').addEventListener('submit', (e) => {
+        e.preventDefault()
+        handleSubmit('employee-form', '/employees', '员工添加成功')
+      })
+      
+      document.getElementById('dependent-form').addEventListener('submit', (e) => {
+        e.preventDefault()
+        handleSubmit('dependent-form', '/dependents', '家属添加成功')
+      })
+      
+      document.getElementById('customer-form').addEventListener('submit', (e) => {
+        e.preventDefault()
+        handleSubmit('customer-form', '/customers', '客户添加成功')
+      })
+      
+      document.getElementById('account-form').addEventListener('submit', (e) => {
+        e.preventDefault()
+        handleSubmit('account-form', '/accounts', '账户创建成功')
+      })
+
+      document.getElementById('loan-form').addEventListener('submit', (e) => {
+        e.preventDefault()
+        handleSubmit('loan-form', '/loans', '贷款创建成功')
+      })
+      
+      // 账户类型切换
+      document.querySelector('[name="type"]').addEventListener('change', (e) => {
+        if (e.target.value === 'savings') {
+          document.querySelector('.savings-fields').classList.remove('hidden')
+          document.querySelector('.checking-fields').classList.add('hidden')
+        } else {
+          document.querySelector('.savings-fields').classList.add('hidden')
+          document.querySelector('.checking-fields').classList.remove('hidden')
+        }
+      })
+    })
+  </script>
 </body>
 </html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>员工查询</title>
+  <style>
+    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; background:#f5f7fa; margin:0 }
+    .header { background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.1); padding:16px 24px; display:flex; justify-content:space-between; align-items:center }
+    .logo { font-weight:700; color:#2d3748 }
+    .container { max-width:900px; margin:24px auto; padding:0 24px }
+    .card { background:#fff; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.1); padding:24px; margin-bottom:24px }
+    .form-group { margin-bottom:16px }
+    label { display:block; margin-bottom:8px; color:#4a5568 }
+    input { width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:6px; font-size:16px }
+    .btn { padding:8px 16px; border-radius:6px; border:none; background:#4299e1; color:#fff; cursor:pointer }
+    table { width:100%; border-collapse:collapse }
+    th,td { text-align:left; padding:12px; border-bottom:1px solid #e2e8f0 }
+    th { background:#f7fafc; color:#4a5568 }
+    .alert { padding:12px; border-radius:6px; margin:16px 0 }
+    .alert-error { background:#fed7d7; color:#742a2a; border:1px solid #feb2b2 }
+    .highlight { font-weight:700; color:#2b6cb0 }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">🏦 员工查询</div>
+    <div><a class="btn" href="/admin">返回仪表盘</a></div>
+  </div>
+  <div class="container">
+    <div class="card">
+      <div class="form-group">
+        <label>员工ID</label>
+        <input id="eid" placeholder="请输入员工ID">
+      </div>
+      <div class="form-group">
+        <label><input type="checkbox" id="fuzzy"> 模糊查询</label>
+      </div>
+      <button class="btn" onclick="doQuery()">查询</button>
+      <div id="err" class="alert alert-error" style="display:none"></div>
+    </div>
+    <div class="card">
+      <table id="result"><thead></thead><tbody></tbody></table>
+    </div>
+  </div>
+  <script>
+    async function doQuery(){
+      const id = document.getElementById('eid').value.trim()
+      const f = document.getElementById('fuzzy').checked
+      if(!id){ showErr('请填写员工ID'); return }
+      const url = '/admin/api/query/employee?id=' + encodeURIComponent(id) + (f?'&fuzzy=1':'')
+      const r = await fetch(url)
+      const j = await r.json()
+      if(!r.ok){ showErr(j.error||'查询失败'); return }
+      render(j, f)
+    }
+    function showErr(msg){ const el = document.getElementById('err'); el.textContent=msg; el.style.display='block' }
+    function render(data, isList){
+      const t = document.getElementById('result')
+      const thead = '<tr><th class="highlight">员工ID</th><th>姓名</th><th>电话</th><th>入职日期</th><th>上级ID</th></tr>'
+      const list = isList ? data : [data]
+      const rows = list.map(r => `<tr><td class="highlight">${r.id||''}</td><td>${r.name||''}</td><td>${r.phone||''}</td><td>${r.hire_date||''}</td><td>${r.manager_id||''}</td></tr>`)
+      t.querySelector('thead').innerHTML = thead
+      t.querySelector('tbody').innerHTML = rows.join('')
+      document.getElementById('err').style.display='none'
+    }
+  </script>
+</body>
+</html>

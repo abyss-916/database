@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>个人中心</title>
   <style>
-    :root { --bg:#111827; --accent:#10b981; --card:#0b1222; --text:#e5e7eb; --muted:#94a3b8; }
+    :root { --bg:#111827; --accent:#10b981; --card:#0b1222; --text:#e5e7eb; --muted:#94a3b8; --danger: #ef4444; }
     body { margin:0; background: radial-gradient(900px 500px at 30% 0%, #0b1222 0%, #111827 35%, #0a0f1f 100%); color: var(--text); font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial; }
     .hero { background: linear-gradient(135deg, rgba(16,185,129,.18), rgba(14,165,233,.18)); border-bottom: 1px solid rgba(148,163,184,.15); }
     .hero-inner { max-width: 1100px; margin: 0 auto; padding: 24px; display:flex; align-items:center; justify-content:space-between; }
@@ -13,62 +13,656 @@
     .brand-badge { width:40px; height:40px; border-radius:12px; background: linear-gradient(135deg, var(--accent), #34d399); display:flex; align-items:center; justify-content:center; color:#fff; }
     .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
     .grid { display:grid; grid-template-columns: .9fr 1.1fr; gap:18px; }
-    .card { background: linear-gradient(180deg, rgba(11,18,34,.9), rgba(11,18,34,.6)); border: 1px solid rgba(148,163,184,.12); border-radius:16px; padding:16px; }
+    .card { background: linear-gradient(180deg, rgba(11,18,34,.9), rgba(11,18,34,.6)); border: 1px solid rgba(148,163,184,.12); border-radius:16px; padding:16px; margin-bottom: 18px; }
     h3 { margin:0 0 10px; font-size:16px; color:#cbd5e1; }
     .status { font-size:13px; color:#cbd5e1; }
     label { font-size:13px; color:#94a3b8; display:block; margin-bottom:10px; }
-    input { width:100%; padding:10px 12px; border-radius:12px; border:1px solid rgba(148,163,184,.22); background:#0b1222; color:var(--text); outline:none; margin-top:6px; }
-    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(16,185,129,.2); }
+    input, select, textarea { width:100%; padding:10px 12px; border-radius:12px; border:1px solid rgba(148,163,184,.22); background:#0b1222; color:var(--text); outline:none; margin-top:6px; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(16,185,129,.2); }
     .actions { margin-top:12px; display:flex; gap:10px; }
     .btn { appearance:none; border:none; border-radius:10px; padding:10px 14px; font-weight:600; cursor:pointer; }
     .btn-primary { background: linear-gradient(135deg, var(--accent), #34d399); color:#fff; }
+    .btn-danger { background: linear-gradient(135deg, var(--danger), #f87171); color:#fff; }
+    .btn-warning { background: linear-gradient(135deg, #f59e0b, #fbbf24); color:#fff; }
     table { width:100%; border-collapse: collapse; }
     th, td { border-bottom:1px solid rgba(148,163,184,.1); padding:10px; text-align:left; font-size:13px; }
+    .tabs { display: flex; gap: 10px; margin-bottom: 15px; }
+    .tab { padding: 8px 16px; border-radius: 8px; background: rgba(148,163,184,.12); color: #cbd5e1; cursor: pointer; font-weight: 600; transition: .18s; }
+    .tab.active { background: linear-gradient(135deg, rgba(16,185,129,.35), rgba(14,165,233,.35)); color: #fff; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .form-group { margin-bottom: 15px; }
+    .alert { padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 13px; }
+    .alert-success { background: rgba(16,185,129,.15); color: #34d399; border: 1px solid rgba(16,185,129,.35); }
+    .alert-error { background: rgba(239,68,68,.15); color: #f87171; border: 1px solid rgba(239,68,68,.35); }
+    .hidden { display: none; }
   </style>
   <script>
     let csrfToken
-    async function getCsrf() { const r = await fetch('/csrf-token'); const j = await r.json(); csrfToken = j.token }
-    async function loadMe() { const r = await fetch('/me'); const j = await r.json(); renderMe(j) }
-    async function loadHistory() { const r = await fetch('/user/history'); const j = await r.json(); renderHistory(j) }
+    let activeTab = 'overview'
+
+    async function getCsrf() { 
+      const r = await fetch('/csrf-token'); 
+      const j = await r.json(); 
+      csrfToken = j.token 
+    }
+
+    async function loadMe() { 
+      const r = await fetch('/me'); 
+      const j = await r.json(); 
+      renderMe(j) 
+    }
+
+    async function loadAccounts() {
+      const r = await fetch('/user/accounts');
+      const j = await r.json();
+      renderAccounts(j);
+    }
+
+    async function loadTransactions() {
+      const r = await fetch('/user/transactions');
+      const j = await r.json();
+      renderTransactions(j);
+    }
+
+    async function loadHistory() { 
+      const r = await fetch('/user/history'); 
+      const j = await r.json(); 
+      renderHistory(j) 
+    }
+
     function renderMe(m) {
       const el = document.getElementById('me')
       el.innerHTML = `<div>用户名：<b>${m.username}</b></div><div>角色：<b>${m.role}</b></div><div>注册时间：<b>${m.created_at || ''}</b></div><div>最近登录：<b>${m.last_login_at || ''}</b></div>`
     }
+
+    function renderAccounts(accounts) {
+      const el = document.getElementById('accounts-list');
+      if (!accounts.length) {
+        el.innerHTML = '<tr><td colspan="5">暂无账户</td></tr>';
+        return;
+      }
+
+      el.innerHTML = accounts.map(acc => `
+        <tr>
+          <td>${acc.account_no}</td>
+          <td>${acc.type}</td>
+          <td>¥${parseFloat(acc.balance).toFixed(2)}</td>
+          <td>${acc.created_at ? new Date(acc.created_at).toLocaleDateString() : ''}</td>
+          <td>
+            ${acc.type === 'savings' ? `利率: ${(acc.interest_rate * 100).toFixed(2)}%` : ''}
+            ${acc.type === 'checking' ? `透支: ¥${parseFloat(acc.overdraft_limit || 0).toFixed(2)}` : ''}
+            ${acc.balance == 0 && acc.type !== 'closed' ? `<button class="btn btn-warning" onclick="requestCloseAccount(${acc.id}, ${acc.balance})" style="margin-left: 10px;">注销</button>` : ''}
+            ${acc.balance != 0 && acc.type !== 'closed' ? `<button class="btn btn-warning" onclick="requestCloseAccount(${acc.id}, ${acc.balance})" style="margin-left: 10px;">申请注销</button>` : ''}
+            ${acc.type === 'closed' ? `<span style="color: #ef4444;">已注销</span>` : ''}
+          </td>
+        </tr>
+      `).join('');
+      
+      // 同时更新详情面板
+      const detailEl = document.getElementById('accounts-list-detail');
+      detailEl.innerHTML = el.innerHTML;
+    }
+
+    function renderTransactions(transactions) {
+      const el = document.getElementById('transactions-list');
+      if (!transactions.length) {
+        el.innerHTML = '<tr><td colspan="5">暂无交易记录</td></tr>';
+        return;
+      }
+
+      el.innerHTML = transactions.map(txn => `
+        <tr>
+          <td>${txn.account_no}</td>
+          <td>${txn.txn_type}</td>
+          <td>¥${parseFloat(txn.amount).toFixed(2)}</td>
+          <td>¥${parseFloat(txn.balance_after).toFixed(2)}</td>
+          <td>${txn.created_at ? new Date(txn.created_at).toLocaleString() : ''}</td>
+        </tr>
+      `).join('');
+      
+      // 同时更新详情面板
+      const detailEl = document.getElementById('transactions-list-detail');
+      detailEl.innerHTML = el.innerHTML;
+    }
+
     function renderHistory(rows) {
       const el = document.getElementById('hist_tbl')
-      if (!rows.length) { el.innerHTML = '<thead><tr><th>无记录</th></tr></thead>'; return }
+      if (!rows.length) { 
+        el.innerHTML = '<thead><tr><th>无记录</th></tr></thead>'; 
+        return 
+      }
       const thead = '<thead><tr><th>动作</th><th>时间</th></tr></thead>'
-      const tbody = '<tbody>' + rows.map(r => `<tr><td>${r.action}</td><td>${r.created_at}</td></tr>`).join('') + '</tbody>'
+      const tbody = '<tbody>' + rows.map(r => `<tr><td>${r.action}</td><td>${r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td></tr>`).join('') + '</tbody>'
       el.innerHTML = thead + tbody
     }
+
     async function changePwd(e) {
       e.preventDefault()
       const o = document.getElementById('old').value
       const n = document.getElementById('new').value
-      if (!o || !n || n.length < 6) { setStatus('pwd_status', false, '请填写旧密码和长度≥6的新密码'); return }
-      const r = await fetch('/user/change-password', { method:'POST', headers:{ 'Content-Type':'application/json','X-CSRF-Token': csrfToken }, body: JSON.stringify({ old_password: o, new_password: n }) })
+      if (!o || !n || n.length < 6) { 
+        setStatus('pwd_status', false, '请填写旧密码和长度≥6的新密码'); 
+        return 
+      }
+      const r = await fetch('/user/change-password', { 
+        method:'POST', 
+        headers:{ 
+          'Content-Type':'application/json',
+          'X-CSRF-Token': csrfToken 
+        }, 
+        body: JSON.stringify({ old_password: o, new_password: n }) 
+      })
       const j = await r.json()
       setStatus('pwd_status', r.status === 200, r.status === 200 ? '密码已更新' : '更新失败：' + (j.error || '未知错误'))
     }
-    function setStatus(id, ok, msg) { const el = document.getElementById(id); el.textContent = msg; el.className = 'status ' + (ok ? '' : '') }
-    window.addEventListener('load', async () => { await getCsrf(); loadMe(); loadHistory() })
+
+    async function handleCreateAccount(e) {
+      e.preventDefault();
+      const accountType = document.getElementById('create-account-type').value;
+      
+      if (!accountType) {
+        setStatus('create-account-status', false, '请选择账户类型');
+        return;
+      }
+
+      const r = await fetch('/user/create-account', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        body: JSON.stringify({ account_type: accountType })
+      });
+
+      const j = await r.json();
+      if (r.status === 200) {
+        setStatus('create-account-status', true, `账户创建成功，账户号: ${j.account_no}`);
+        loadAccounts();
+        document.getElementById('create-account-form').reset();
+        // 2秒后清除成功消息
+        setTimeout(() => {
+          document.getElementById('create-account-status').style.display = 'none';
+        }, 2000);
+        // 刷新账户选择下拉框
+        setTimeout(populateAccountSelects, 1000);
+      } else {
+        setStatus('create-account-status', false, `账户创建失败: ${j.error}`);
+      }
+    }
+
+    async function handleDeposit(e) {
+      e.preventDefault();
+      const accountId = document.getElementById('deposit-account').value;
+      const amount = parseFloat(document.getElementById('deposit-amount').value);
+      const remark = document.getElementById('deposit-remark').value;
+
+      if (!accountId || !amount || amount <= 0) {
+        setStatus('deposit-status', false, '请选择账户并输入有效的金额');
+        return;
+      }
+
+      const r = await fetch('/user/deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        body: JSON.stringify({ account_id: accountId, amount, remark })
+      });
+
+      const j = await r.json();
+      if (r.status === 200) {
+        setStatus('deposit-status', true, `存款成功，当前余额: ¥${j.balance.toFixed(2)}`);
+        loadAccounts();
+        loadTransactions();
+        document.getElementById('deposit-form').reset();
+        // 2秒后清除成功消息
+        setTimeout(() => {
+          document.getElementById('deposit-status').style.display = 'none';
+        }, 2000);
+      } else {
+        setStatus('deposit-status', false, `存款失败: ${j.error}`);
+      }
+    }
+
+    async function handleWithdraw(e) {
+      e.preventDefault();
+      const accountId = document.getElementById('withdraw-account').value;
+      const amount = parseFloat(document.getElementById('withdraw-amount').value);
+      const remark = document.getElementById('withdraw-remark').value;
+
+      if (!accountId || !amount || amount <= 0) {
+        setStatus('withdraw-status', false, '请选择账户并输入有效的金额');
+        return;
+      }
+
+      const r = await fetch('/user/withdraw', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        body: JSON.stringify({ account_id: accountId, amount, remark })
+      });
+
+      const j = await r.json();
+      if (r.status === 200) {
+        setStatus('withdraw-status', true, `取款成功，当前余额: ¥${j.balance.toFixed(2)}`);
+        loadAccounts();
+        loadTransactions();
+        document.getElementById('withdraw-form').reset();
+        // 2秒后清除成功消息
+        setTimeout(() => {
+          document.getElementById('withdraw-status').style.display = 'none';
+        }, 2000);
+      } else {
+        setStatus('withdraw-status', false, `取款失败: ${j.error}`);
+      }
+    }
+
+    async function handleTransfer(e) {
+      e.preventDefault();
+      const fromAccountId = document.getElementById('transfer-from-account').value;
+      const toAccountId = document.getElementById('transfer-to-account').value;
+      const amount = parseFloat(document.getElementById('transfer-amount').value);
+      const remark = document.getElementById('transfer-remark').value;
+
+      if (!fromAccountId || !toAccountId || !amount || amount <= 0) {
+        setStatus('transfer-status', false, '请选择转出账户、转入账户并输入有效的金额');
+        return;
+      }
+
+      if (fromAccountId === toAccountId) {
+        setStatus('transfer-status', false, '转出账户和转入账户不能相同');
+        return;
+      }
+
+      const r = await fetch('/user/transfer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        body: JSON.stringify({ from_account_id: fromAccountId, to_account_id: toAccountId, amount, remark })
+      });
+
+      const j = await r.json();
+      if (r.status === 200) {
+        setStatus('transfer-status', true, `转账成功`);
+        loadAccounts();
+        loadTransactions();
+        document.getElementById('transfer-form').reset();
+        // 2秒后清除成功消息
+        setTimeout(() => {
+          document.getElementById('transfer-status').style.display = 'none';
+        }, 2000);
+      } else {
+        setStatus('transfer-status', false, `转账失败: ${j.error}`);
+      }
+    }
+
+    async function requestCloseAccount(accountId, balance) {
+      let reason = "";
+      if (balance != 0) {
+        reason = prompt("账户余额不为零，请输入注销账户的原因，提交给管理员审批:");
+        if (reason === null) return; // 用户取消操作
+      } else {
+        if (!confirm("确定要注销此账户吗？")) return;
+        reason = "用户主动注销";
+      }
+      
+      const r = await fetch('/user/close-account-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        body: JSON.stringify({ account_id: accountId, reason: reason })
+      });
+
+      const j = await r.json();
+      if (r.status === 200) {
+        alert(`${j.message}`);
+        loadAccounts();
+        // 刷新账户选择下拉框
+        setTimeout(populateAccountSelects, 1000);
+      } else {
+        alert(`账户注销申请失败: ${j.error}`);
+      }
+    }
+
+    function setStatus(id, ok, msg) { 
+      const el = document.getElementById(id); 
+      el.textContent = msg; 
+      el.className = 'alert ' + (ok ? 'alert-success' : 'alert-error');
+      el.style.display = 'block';
+    }
+
+    function activateTab(name) {
+      activeTab = name;
+      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+      document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
+    }
+
+    // 填充账户选择下拉框
+    async function populateAccountSelects() {
+      const r = await fetch('/user/accounts');
+      const accounts = await r.json();
+      
+      const selectElements = [
+        document.getElementById('deposit-account'),
+        document.getElementById('withdraw-account'),
+        document.getElementById('transfer-from-account'),
+        document.getElementById('transfer-to-account')
+      ];
+      
+      selectElements.forEach(select => {
+        // 保存当前选中值
+        const currentValue = select.value;
+        
+        // 清空选项
+        select.innerHTML = '';
+        
+        // 添加默认选项
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = '请选择账户';
+        select.appendChild(defaultOption);
+        
+        // 添加账户选项（排除已注销的账户）
+        accounts.filter(acc => acc.type !== 'closed').forEach(acc => {
+          const option = document.createElement('option');
+          option.value = acc.id;
+          option.textContent = `${acc.account_no} (余额: ¥${parseFloat(acc.balance).toFixed(2)})`;
+          select.appendChild(option);
+        });
+        
+        // 恢复选中值
+        if (currentValue) {
+          select.value = currentValue;
+        }
+      });
+    }
+
+    window.addEventListener('load', async () => { 
+      await getCsrf(); 
+      loadMe(); 
+      loadHistory();
+      loadAccounts();
+      loadTransactions();
+      populateAccountSelects();
+
+      // 绑定表单提交事件
+      document.getElementById('change-pwd-form').addEventListener('submit', changePwd);
+      document.getElementById('create-account-form').addEventListener('submit', handleCreateAccount);
+      document.getElementById('deposit-form').addEventListener('submit', handleDeposit);
+      document.getElementById('withdraw-form').addEventListener('submit', handleWithdraw);
+      document.getElementById('transfer-form').addEventListener('submit', handleTransfer);
+
+      // 绑定标签页切换事件
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => activateTab(tab.dataset.tab));
+      });
+      
+      // 定时刷新账户信息
+      setInterval(() => {
+        if (activeTab === 'accounts' || activeTab === 'overview') {
+          loadAccounts();
+          populateAccountSelects();
+        }
+        if (activeTab === 'transactions' || activeTab === 'overview') {
+          loadTransactions();
+        }
+      }, 30000); // 每30秒刷新一次
+    })
   </script>
 </head>
 <body>
-  <div class="hero"><div class="hero-inner"><div class="brand"><div class="brand-badge">个</div>个人中心</div><div><a class="btn btn-primary" href="/login">退出登录</a></div></div></div>
+  <div class="hero">
+    <div class="hero-inner">
+      <div class="brand">
+        <div class="brand-badge">个</div>个人中心
+      </div>
+      <div>
+        <a class="btn btn-primary" href="/login">退出登录</a>
+      </div>
+    </div>
+  </div>
+  
   <div class="container">
-    <div class="grid">
-      <div class="card"><h3>基本信息</h3><div id="me" class="status"></div></div>
-      <div class="card"><h3>账户设置</h3>
-        <form onsubmit="changePwd(event)">
-          <label>旧密码<input id="old" type="password" required></label>
-          <label>新密码<input id="new" type="password" required></label>
-          <div class="actions"><button class="btn btn-primary" type="submit">更新密码</button></div>
-          <div id="pwd_status" class="status"></div>
+    <div class="tabs">
+      <div class="tab active" data-tab="overview">概览</div>
+      <div class="tab" data-tab="accounts">我的账户</div>
+      <div class="tab" data-tab="transactions">交易记录</div>
+      <div class="tab" data-tab="create-account">创建账户</div>
+      <div class="tab" data-tab="deposit">存款</div>
+      <div class="tab" data-tab="withdraw">取款</div>
+      <div class="tab" data-tab="transfer">转账</div>
+      <div class="tab" data-tab="settings">账户设置</div>
+    </div>
+
+    <!-- 概览面板 -->
+    <div class="panel active" id="panel-overview">
+      <div class="grid">
+        <div class="card">
+          <h3>基本信息</h3>
+          <div id="me" class="status"></div>
+        </div>
+        <div class="card">
+          <h3>账户总览</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>账户号</th>
+                <th>类型</th>
+                <th>余额</th>
+                <th>开户日期</th>
+                <th>详情</th>
+              </tr>
+            </thead>
+            <tbody id="accounts-list">
+              <tr>
+                <td colspan="5">加载中...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h3>最近交易</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>账户</th>
+              <th>类型</th>
+              <th>金额</th>
+              <th>余额</th>
+              <th>时间</th>
+            </tr>
+          </thead>
+          <tbody id="transactions-list">
+            <tr>
+              <td colspan="5">加载中...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 我的账户面板 -->
+    <div class="panel" id="panel-accounts">
+      <div class="card">
+        <h3>我的账户</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>账户号</th>
+              <th>类型</th>
+              <th>余额</th>
+              <th>开户日期</th>
+              <th>详情/操作</th>
+            </tr>
+          </thead>
+          <tbody id="accounts-list-detail">
+            <!-- 动态填充 -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 交易记录面板 -->
+    <div class="panel" id="panel-transactions">
+      <div class="card">
+        <h3>交易记录</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>账户</th>
+              <th>类型</th>
+              <th>金额</th>
+              <th>交易后余额</th>
+              <th>时间</th>
+            </tr>
+          </thead>
+          <tbody id="transactions-list-detail">
+            <!-- 动态填充 -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 创建账户面板 -->
+    <div class="panel" id="panel-create-account">
+      <div class="card">
+        <h3>创建新账户</h3>
+        <form id="create-account-form">
+          <div class="form-group">
+            <label for="create-account-type">账户类型</label>
+            <select id="create-account-type" required>
+              <option value="">请选择账户类型</option>
+              <option value="savings">储蓄账户</option>
+              <option value="checking">支票账户</option>
+            </select>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" type="submit">创建账户</button>
+          </div>
+          <div id="create-account-status" class="alert" style="display:none;"></div>
+        </form>
+      </div>
+      <div class="card">
+        <h3>账户类型说明</h3>
+        <div class="status">
+          <p><strong>储蓄账户：</strong>用于存储资金，享受利息收益，默认年利率1%</p>
+          <p><strong>支票账户：</strong>用于日常交易，支持透支功能，默认透支额度0元</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 存款面板 -->
+    <div class="panel" id="panel-deposit">
+      <div class="card">
+        <h3>存款</h3>
+        <form id="deposit-form">
+          <div class="form-group">
+            <label for="deposit-account">选择账户</label>
+            <select id="deposit-account" required></select>
+          </div>
+          <div class="form-group">
+            <label for="deposit-amount">存款金额</label>
+            <input type="number" id="deposit-amount" step="0.01" min="0.01" placeholder="请输入存款金额" required>
+          </div>
+          <div class="form-group">
+            <label for="deposit-remark">备注（可选）</label>
+            <input type="text" id="deposit-remark" placeholder="请输入备注">
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" type="submit">确认存款</button>
+          </div>
+          <div id="deposit-status" class="alert" style="display:none;"></div>
         </form>
       </div>
     </div>
-    <div class="card" style="margin-top:18px"><h3>操作历史记录</h3><table id="hist_tbl"></table></div>
+
+    <!-- 取款面板 -->
+    <div class="panel" id="panel-withdraw">
+      <div class="card">
+        <h3>取款</h3>
+        <form id="withdraw-form">
+          <div class="form-group">
+            <label for="withdraw-account">选择账户</label>
+            <select id="withdraw-account" required></select>
+          </div>
+          <div class="form-group">
+            <label for="withdraw-amount">取款金额</label>
+            <input type="number" id="withdraw-amount" step="0.01" min="0.01" placeholder="请输入取款金额" required>
+          </div>
+          <div class="form-group">
+            <label for="withdraw-remark">备注（可选）</label>
+            <input type="text" id="withdraw-remark" placeholder="请输入备注">
+          </div>
+          <div class="actions">
+            <button class="btn btn-danger" type="submit">确认取款</button>
+          </div>
+          <div id="withdraw-status" class="alert" style="display:none;"></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 转账面板 -->
+    <div class="panel" id="panel-transfer">
+      <div class="card">
+        <h3>转账</h3>
+        <form id="transfer-form">
+          <div class="form-group">
+            <label for="transfer-from-account">转出账户</label>
+            <select id="transfer-from-account" required></select>
+          </div>
+          <div class="form-group">
+            <label for="transfer-to-account">转入账户</label>
+            <select id="transfer-to-account" required></select>
+          </div>
+          <div class="form-group">
+            <label for="transfer-amount">转账金额</label>
+            <input type="number" id="transfer-amount" step="0.01" min="0.01" placeholder="请输入转账金额" required>
+          </div>
+          <div class="form-group">
+            <label for="transfer-remark">备注（可选）</label>
+            <input type="text" id="transfer-remark" placeholder="请输入备注">
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" type="submit">确认转账</button>
+          </div>
+          <div id="transfer-status" class="alert" style="display:none;"></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 账户设置面板 -->
+    <div class="panel" id="panel-settings">
+      <div class="card">
+        <h3>账户设置</h3>
+        <form id="change-pwd-form">
+          <div class="form-group">
+            <label for="old">旧密码</label>
+            <input id="old" type="password" required>
+          </div>
+          <div class="form-group">
+            <label for="new">新密码</label>
+            <input id="new" type="password" required>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" type="submit">更新密码</button>
+          </div>
+          <div id="pwd_status" class="alert" style="display:none;"></div>
+        </form>
+      </div>
+      <div class="card">
+        <h3>操作历史记录</h3>
+        <table id="hist_tbl"></table>
+      </div>
+    </div>
   </div>
 </body>
 </html>
