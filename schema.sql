@@ -52,8 +52,20 @@ CREATE TABLE IF NOT EXISTS account (
   account_no VARCHAR(64) NOT NULL UNIQUE,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   balance NUMERIC(18,2) NOT NULL DEFAULT 0,
-  type account_type NOT NULL
+  type account_type NOT NULL,
+  closed_at TIMESTAMP
 );
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 
+    FROM information_schema.columns 
+    WHERE table_name = 'account' AND column_name = 'closed_at'
+  ) THEN
+    ALTER TABLE account ADD COLUMN closed_at TIMESTAMP;
+  END IF;
+END$$;
 
 CREATE TABLE IF NOT EXISTS account_customer (
   account_id BIGINT NOT NULL REFERENCES account(id) ON DELETE CASCADE,
@@ -211,6 +223,46 @@ CREATE TABLE IF NOT EXISTS loan (
   amount NUMERIC(18,2) NOT NULL,
   branch_id BIGINT NOT NULL REFERENCES branch(id)
 );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns WHERE table_name = 'loan' AND column_name = 'interest_rate'
+  ) THEN
+    ALTER TABLE loan ADD COLUMN interest_rate NUMERIC(5,4) NOT NULL DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns WHERE table_name = 'loan' AND column_name = 'term_months'
+  ) THEN
+    ALTER TABLE loan ADD COLUMN term_months INTEGER NOT NULL DEFAULT 1;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns WHERE table_name = 'loan' AND column_name = 'repayment_method'
+  ) THEN
+    ALTER TABLE loan ADD COLUMN repayment_method VARCHAR(32) NOT NULL DEFAULT 'EQUAL_INSTALLMENT';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns WHERE table_name = 'loan' AND column_name = 'status'
+  ) THEN
+    ALTER TABLE loan ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'PENDING';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns WHERE table_name = 'loan' AND column_name = 'start_date'
+  ) THEN
+    ALTER TABLE loan ADD COLUMN start_date DATE;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns WHERE table_name = 'loan' AND column_name = 'end_date'
+  ) THEN
+    ALTER TABLE loan ADD COLUMN end_date DATE;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns WHERE table_name = 'loan' AND column_name = 'settled_at'
+  ) THEN
+    ALTER TABLE loan ADD COLUMN settled_at TIMESTAMP;
+  END IF;
+END$$;
+CREATE INDEX IF NOT EXISTS idx_loan_status ON loan(status);
+CREATE INDEX IF NOT EXISTS idx_loan_branch ON loan(branch_id);
 
 -- 添加贷款客户关联表
 CREATE TABLE IF NOT EXISTS loan_customer (
@@ -290,6 +342,18 @@ BEGIN
   EXCEPTION WHEN duplicate_object THEN
   END;
 END$$;
+CREATE TABLE IF NOT EXISTS repayment_schedule (
+  id BIGSERIAL PRIMARY KEY,
+  loan_id BIGINT NOT NULL REFERENCES loan(id) ON DELETE CASCADE,
+  period_no INTEGER NOT NULL,
+  due_date DATE NOT NULL,
+  principal_due NUMERIC(18,2) NOT NULL,
+  interest_due NUMERIC(18,2) NOT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'DUE',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (loan_id, period_no)
+);
+CREATE INDEX IF NOT EXISTS idx_repayment_schedule_loan_due ON repayment_schedule(loan_id, due_date);
 
 -- 添加活动日志表
 CREATE TABLE IF NOT EXISTS activity_log (

@@ -277,9 +277,9 @@
       const idno = document.getElementById('r_idno').value.trim()
       const city = document.getElementById('r_city').value.trim()
       const street = document.getElementById('r_street').value.trim()
-      const okName = /^[A-Za-z0-9]{4,12}$/.test(u)
+      const okName = /^[A-Za-z0-9]{1,12}$/.test(u)
       if (!u || !p || !n || !idno || !city || !street) { setErr('r_err', '请完整填写注册信息'); return }
-      if (!okName) { setErr('r_err', '账号需为4-12位英文或数字'); return }
+      if (!okName) { setErr('r_err', '账号需为1-12位英文或数字'); return }
       if (u === 'administrator') { setErr('r_err', '管理员账户禁止注册'); return }
       const r = await fetch('/register', { method: 'POST', headers: { 'Content-Type':'application/json', 'X-CSRF-Token': csrfToken }, credentials:'same-origin', body: JSON.stringify({ username: u, password: p, name: n, identity_no: idno, city, street }) })
       const ct = r.headers.get('content-type') || ''
@@ -315,7 +315,7 @@
         <div class="form-row">
           <div class="form-group">
             <label for="r_u">用户名</label>
-            <input id="r_u" type="text" placeholder="4-12位英文或数字" required pattern="[A-Za-z0-9]{4,12}" title="4-12位英文或数字">
+            <input id="r_u" type="text" placeholder="1-12位英文或数字" required pattern="[A-Za-z0-9]{1,12}" title="1-12位英文或数字">
           </div>
           
           <div class="form-group">

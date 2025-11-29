@@ -38,6 +38,7 @@
     }
   </style>
 </style>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 </head>
 <body>
   <div class="header">
@@ -88,6 +89,7 @@
               <th>联行号</th>
               <th>名称</th>
               <th>城市</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -127,6 +129,7 @@
               <th>电话</th>
               <th>入职日期</th>
               <th>上级ID</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -169,6 +172,7 @@
               <th>员工ID</th>
               <th>姓名</th>
               <th>关系</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -209,6 +213,7 @@
               <th>城市</th>
               <th>街道</th>
               <th>助理员工ID</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -257,6 +262,7 @@
               <th>余额</th>
               <th>类型</th>
               <th>利率/透支额度</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -306,10 +312,11 @@
         <table id="loans-table">
           <thead>
             <tr>
-              <th>ID</th>
               <th>贷款号</th>
-              <th>金额</th>
-              <th>发放分行ID</th>
+              <th>贷款本金金额</th>
+              <th>累计利息金额</th>
+              <th>剩余应还金额</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -329,6 +336,21 @@
           <div class="form-group">
             <label>发放分行ID</label>
             <input type="number" name="branch_id" required>
+          </div>
+          <div class="form-group">
+            <label>年利率</label>
+            <input type="number" name="interest_rate" step="0.0001" min="0" placeholder="例如 0.05 表示 5%" required>
+          </div>
+          <div class="form-group">
+            <label>期限（月）</label>
+            <input type="number" name="term_months" min="1" required>
+          </div>
+          <div class="form-group">
+            <label>还款方式</label>
+            <select name="repayment_method" required>
+              <option value="EQUAL_INSTALLMENT">等额本息</option>
+              <option value="EQUAL_PRINCIPAL">等额本金</option>
+            </select>
           </div>
           <div class="form-group">
             <label>关联客户ID列表（逗号分隔）</label>
@@ -359,6 +381,21 @@
         </table>
       </div>
       <div class="card">
+        <h2>已注销账户列表</h2>
+        <table id="closed-accounts-table">
+          <thead>
+            <tr>
+              <th>账户ID</th>
+              <th>账户号</th>
+              <th>关闭时间</th>
+              <th>存活时间</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="card">
         <h2>审批操作</h2>
         <form id="approval-form">
           <input type="hidden" id="approval-business-id">
@@ -375,6 +412,49 @@
   </div>
 
   <script>
+    function mountDeleteButtons(tableSelector, endpoint, reloadFn) {
+      const containers = document.querySelectorAll(`${tableSelector} .delete-container`)
+      containers.forEach(el => {
+        const id = el.dataset.id
+        const app = Vue.createApp({
+          data(){ return { loading:false, error:'' } },
+          methods: {
+            async onDelete(){
+              if(!confirm('确认删除该记录？')) return
+              this.loading = true
+              this.error = ''
+              try {
+                const sr = await fetch('/admin/sensitive/start', { method:'POST', headers:{ 'X-CSRF-Token': csrfToken } })
+                const sj = await sr.json()
+                if(!sr.ok) throw new Error(sj.error || '无法获取授权码')
+                const code = sj.code
+                const r = await fetch(endpoint, {
+                  method: 'POST',
+                  headers: { 'Content-Type':'application/json', 'X-CSRF-Token': csrfToken },
+                  body: JSON.stringify({ id: parseInt(id), confirm: true, code })
+                })
+                let j = null
+                const ct = (r.headers.get('content-type') || '')
+                if (ct.includes('application/json')) j = await r.json()
+                else {
+                  const t = await r.text()
+                  if (!r.ok) throw new Error(t)
+                }
+                if (!r.ok) throw new Error((j && j.error) || '删除失败')
+                await reloadFn()
+              } catch (e) {
+                this.error = e.message || String(e)
+                alert(`删除失败: ${this.error}`)
+              } finally {
+                this.loading = false
+              }
+            }
+          },
+          template: `<button class="btn btn-danger" :disabled="loading" @click="onDelete">{{ loading ? '删除中...' : '删除' }}</button>`
+        })
+        app.mount(el)
+      })
+    }
     let csrfToken
     let activeTab = 'dashboard'
     
@@ -422,6 +502,7 @@
           break
         case 'approval':
           loadPendingApprovals()
+          loadClosedAccounts()  // 加载已关闭账户列表
           break
       }
     }
@@ -479,8 +560,10 @@
             <td>${b.union_no}</td>
             <td>${b.name}</td>
             <td>${b.city}</td>
+            <td><span class="delete-container" data-id="${b.id}" data-endpoint="/admin/branches/delete"></span></td>
           </tr>
         `).join('')
+        mountDeleteButtons('#branches-table', '/admin/branches/delete', loadBranches)
       } catch (e) {
         console.error('加载分行数据失败:', e)
         showAlert('branch', '加载分行数据失败: ' + e.message, 'error')
@@ -500,8 +583,10 @@
             <td>${e.phone || ''}</td>
             <td>${e.hire_date}</td>
             <td>${e.manager_id || ''}</td>
+            <td><span class="delete-container" data-id="${e.id}" data-endpoint="/admin/employees/delete"></span></td>
           </tr>
         `).join('')
+        mountDeleteButtons('#employees-table', '/admin/employees/delete', loadEmployees)
       } catch (e) {
         console.error('加载员工数据失败:', e)
         showAlert('employee', '加载员工数据失败: ' + e.message, 'error')
@@ -523,8 +608,10 @@
             <td>${d.employee_id}</td>
             <td>${d.name}</td>
             <td>${d.relationship}</td>
+            <td><span class="delete-container" data-id="${d.id}" data-endpoint="/admin/dependents/delete"></span></td>
           </tr>
         `).join('')
+        mountDeleteButtons('#dependents-table', '/admin/dependents/delete', loadDependents)
       } catch (e) {
         console.error('加载家属数据失败:', e)
         showAlert('dependent', '加载家属数据失败: ' + (e.message || e), 'error')
@@ -545,8 +632,10 @@
             <td>${c.city}</td>
             <td>${c.street}</td>
             <td>${c.assistant_employee_id || ''}</td>
+            <td><span class="delete-container" data-id="${c.id}" data-endpoint="/admin/customers/delete"></span></td>
           </tr>
         `).join('')
+        mountDeleteButtons('#customers-table', '/admin/customers/delete', loadCustomers)
       } catch (e) {
         console.error('加载客户数据失败:', e)
         showAlert('customer', '加载客户数据失败: ' + e.message, 'error')
@@ -567,8 +656,10 @@
             <td>¥${parseFloat(a.balance).toFixed(2)}</td>
             <td>${a.type}</td>
             <td>${a.type === 'savings' ? `利率: ${(a.interest_rate * 100).toFixed(2)}%` : `透支: ¥${parseFloat(a.overdraft_limit || 0).toFixed(2)}`}</td>
+            <td><span class="delete-container" data-id="${a.id}" data-endpoint="/admin/accounts/delete"></span></td>
           </tr>
         `).join('')
+        mountDeleteButtons('#accounts-table', '/admin/accounts/delete', loadAccounts)
       } catch (e) {
         console.error('加载账户数据失败:', e)
         showAlert('account', '加载账户数据失败: ' + e.message, 'error')
@@ -578,17 +669,19 @@
     // 加载贷款数据
     async function loadLoans() {
       try {
-        const r = await fetch('/loans')
+        const r = await fetch('/loans/financials')
         const loans = await r.json()
         const tbody = document.querySelector('#loans-table tbody')
         tbody.innerHTML = loans.map(l => `
           <tr>
-            <td>${l.id}</td>
             <td>${l.loan_no}</td>
-            <td>¥${parseFloat(l.amount).toFixed(2)}</td>
-            <td>${l.branch_id}</td>
+            <td>¥${parseFloat(l.principal_amount).toFixed(2)}</td>
+            <td>¥${parseFloat(l.cumulative_interest).toFixed(2)}</td>
+            <td><b>¥${parseFloat(l.remaining_amount).toFixed(2)}</b></td>
+            <td><span class="delete-container" data-id="${l.loan_id}" data-endpoint="/admin/loans/delete"></span></td>
           </tr>
         `).join('')
+        mountDeleteButtons('#loans-table', '/admin/loans/delete', loadLoans)
       } catch (e) {
         console.error('加载贷款数据失败:', e)
         showAlert('loan', '加载贷款数据失败: ' + e.message, 'error')
@@ -615,6 +708,40 @@
       } catch (e) {
         console.error('加载审批数据失败:', e)
         showAlert('approval', '加载审批数据失败: ' + e.message, 'error')
+      }
+    }
+    
+    // 加载已关闭账户数据
+    async function loadClosedAccounts() {
+      try {
+        const r = await fetch('/admin/closed-accounts')
+        const accounts = await r.json()
+        
+        // 确保accounts是数组
+        if (!Array.isArray(accounts)) {
+          console.error('返回的数据不是数组格式:', accounts)
+          showAlert('approval', '数据格式错误，无法显示已关闭账户列表', 'error')
+          return
+        }
+        
+        const tbody = document.querySelector('#closed-accounts-table tbody')
+        if (accounts.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5">暂无已关闭账户</td></tr>'
+          return
+        }
+        
+        tbody.innerHTML = accounts.map(a => `
+          <tr>
+            <td>${a.id}</td>
+            <td>${a.account_no}</td>
+            <td>${a.closed_at}</td>
+            <td>${a.survive_time}</td>
+            <td>${a.status}</td>
+          </tr>
+        `).join('')
+      } catch (e) {
+        console.error('加载已关闭账户数据失败:', e)
+        showAlert('approval', '加载已关闭账户数据失败: ' + e.message, 'error')
       }
     }
     

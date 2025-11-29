@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>客户查询</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <style>
     body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; background:#f5f7fa; margin:0 }
     .header { background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.1); padding:16px 24px; display:flex; justify-content:space-between; align-items:center }
@@ -56,13 +57,53 @@
     function showErr(msg){ const el = document.getElementById('err'); el.textContent=msg; el.style.display='block' }
     function render(data, isList){
       const t = document.getElementById('result')
-      const thead = '<tr><th class="highlight">客户ID</th><th>姓名</th><th>联系电话</th><th>住址</th><th>证件号</th><th>私人助理员工ID</th></tr>'
+      const thead = '<tr><th class="highlight">客户ID</th><th>姓名</th><th>联系电话</th><th>住址</th><th>证件号</th><th>私人助理员工ID</th><th>操作</th></tr>'
       const list = isList ? data : [data]
-      const rows = list.map(r => `<tr><td class="highlight">${r.id||''}</td><td>${r.name||''}</td><td>${r.phone||''}</td><td>${r.address||''}</td><td>${r.identity_no||''}</td><td>${r.assistant_employee_id||''}</td></tr>`)
+      const rows = list.map(r => `<tr><td class="highlight">${r.id||''}</td><td>${r.name||''}</td><td>${r.phone||''}</td><td>${r.address||''}</td><td>${r.identity_no||''}</td><td>${r.assistant_employee_id||''}</td><td><span class='delete-container' data-id='${r.id||''}' data-endpoint='/admin/customers/delete'></span></td></tr>`)
       t.querySelector('thead').innerHTML = thead
       t.querySelector('tbody').innerHTML = rows.join('')
       document.getElementById('err').style.display='none'
+      mountDeleteButtons('#result', '/admin/customers/delete')
     }
+    let csrfToken
+    async function getCsrf(){ const r = await fetch('/csrf-token'); const j = await r.json(); csrfToken = j.token }
+    function mountDeleteButtons(tableSelector, endpoint){
+      const containers = document.querySelectorAll(`${tableSelector} .delete-container`)
+      containers.forEach(el => {
+        const id = el.dataset.id
+        const app = Vue.createApp({
+          data(){ return { loading:false } },
+          methods:{
+            async onDelete(){
+              if(!id) return
+              if(!confirm('确认删除该记录？')) return
+              this.loading = true
+              try {
+                const sr = await fetch('/admin/sensitive/start', { method:'POST', headers:{ 'X-CSRF-Token': csrfToken } })
+                const sj = await sr.json()
+                if(!sr.ok) throw new Error(sj.error||'无法获取授权码')
+                const code = sj.code
+                const r = await fetch(endpoint, { method:'POST', headers:{ 'Content-Type':'application/json','X-CSRF-Token': csrfToken }, body: JSON.stringify({ id: parseInt(id), confirm: true, code }) })
+                const ct = (r.headers.get('content-type')||'')
+                let j = null
+                if (ct.includes('application/json')) j = await r.json()
+                else {
+                  const t = await r.text()
+                  if (!r.ok) throw new Error(t)
+                }
+                if(!r.ok) throw new Error((j && j.error) || '删除失败')
+                const tbody = document.querySelector(`${tableSelector} tbody`)
+                if (tbody) el.closest('tr').remove()
+              } catch(e){ alert(`删除失败: ${e.message||e}`) }
+              finally { this.loading=false }
+            }
+          },
+          template:`<button class='btn' :disabled='loading' @click='onDelete'>{{ loading?"删除中...":"删除" }}</button>`
+        })
+        app.mount(el)
+      })
+    }
+    document.addEventListener('DOMContentLoaded', getCsrf)
   </script>
 </body>
 </html>

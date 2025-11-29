@@ -137,6 +137,126 @@
       el.innerHTML = thead + tbody
     }
 
+    async function loadUserLoans() {
+      try {
+        const r = await fetch('/user/loans/open')
+        if (!r.ok) throw new Error('bad')
+        const loans = await r.json()
+        const el = document.getElementById('loans-list')
+        if (!loans.length) { el.innerHTML = '<tr><td colspan="4">暂无未结清贷款</td></tr>'; return }
+        el.innerHTML = loans.map(l => `<tr><td>${l.loan_no}</td><td>¥${parseFloat(l.principal_amount).toFixed(2)}</td><td>¥${parseFloat(l.remaining_amount).toFixed(2)}</td><td>${l.end_date ? new Date(l.end_date).toLocaleDateString() : ''}</td></tr>`).join('')
+        const loanSelect = document.getElementById('repay-loan')
+        const current = loanSelect.value
+        loanSelect.innerHTML = ''
+        const def = document.createElement('option'); def.value=''; def.textContent='请选择贷款'; loanSelect.appendChild(def)
+        loans.forEach(l => { const o = document.createElement('option'); o.value=l.loan_id; o.textContent=`${l.loan_no}`; loanSelect.appendChild(o) })
+        if (current) loanSelect.value = current
+      } catch (e) {
+        const el = document.getElementById('loans-list')
+        el.innerHTML = '<tr><td colspan="4">贷款服务不可用</td></tr>'
+        const loanSelect = document.getElementById('repay-loan')
+        loanSelect.innerHTML = ''
+        const def = document.createElement('option'); def.value=''; def.textContent='请选择贷款'; loanSelect.appendChild(def)
+      }
+    }
+
+    async function populateSavingsAccounts() {
+      try {
+        const r = await fetch('/user/savings-accounts')
+        if (!r.ok) throw new Error('bad')
+        const accounts = await r.json()
+        const sel = document.getElementById('repay-account')
+        const cur = sel.value
+        sel.innerHTML=''
+        const def = document.createElement('option'); def.value=''; def.textContent='请选择账户'; sel.appendChild(def)
+        accounts.forEach(a => { const o = document.createElement('option'); o.value=a.id; o.textContent=`${a.account_no} (余额: ¥${parseFloat(a.balance).toFixed(2)})`; sel.appendChild(o) })
+        if (cur) sel.value = cur
+        validateRepayAmount()
+      } catch (e) {
+        const sel = document.getElementById('repay-account')
+        sel.innerHTML=''
+        const def = document.createElement('option'); def.value=''; def.textContent='请选择账户'; sel.appendChild(def)
+      }
+    }
+
+    async function updateRepayDue() {
+      const loanId = document.getElementById('repay-loan').value
+      const amountEl = document.getElementById('repay-amount')
+      const tipEl = document.getElementById('repay-max-tip')
+      const endEl = document.getElementById('loan-end-date')
+      if (!loanId) { amountEl.value=''; tipEl.textContent=''; endEl.textContent='-'; return }
+      try {
+        const r = await fetch('/user/loans/open')
+        if (!r.ok) throw new Error('bad')
+        const loans = await r.json()
+        const cur = loans.find(x => String(x.loan_id) === String(loanId))
+        if (cur) {
+          const max = parseFloat(cur.remaining_amount)
+          amountEl.max = max
+          tipEl.textContent = `最大可还金额：¥${max.toFixed(2)}`
+          endEl.textContent = cur.end_date ? new Date(cur.end_date).toISOString().slice(0,10) : '-'
+        }
+      } catch (e) {
+        tipEl.textContent=''
+        endEl.textContent='-'
+      }
+      validateRepayAmount()
+    }
+
+    
+
+    function validateRepayAmount() {
+      const accSel = document.getElementById('repay-account')
+      const amt = parseFloat(document.getElementById('repay-amount').value || '0')
+      if (!accSel.value || !amt) return
+      const text = accSel.selectedOptions[0].textContent
+      const m = text.match(/余额: ¥([0-9.]+)/)
+      if (m) {
+        const bal = parseFloat(m[1])
+        const el = document.getElementById('repay-status')
+        const max = parseFloat(document.getElementById('repay-amount').max || '0')
+        if (amt > bal || (max && amt > max)) {
+          el.textContent = '还款金额超过账户可用余额'
+          el.className = 'alert alert-error'
+          el.style.display = 'block'
+        } else {
+          el.style.display = 'none'
+        }
+      }
+    }
+
+    async function handleRepay(e) {
+      e.preventDefault()
+      const loanId = parseInt(document.getElementById('repay-loan').value)
+      const accountId = parseInt(document.getElementById('repay-account').value)
+      const amount = parseFloat(document.getElementById('repay-amount').value || '0')
+      if (!loanId || !accountId || !amount || amount <= 0) { setStatus('repay-status', false, '请完整选择并确认金额'); return }
+      try {
+        const [lr, ar] = await Promise.all([fetch('/user/loans/open'), fetch('/user/savings-accounts')])
+        if (!lr.ok || !ar.ok) throw new Error('bad')
+        const loans = await lr.json()
+        const accts = await ar.json()
+        const loan = loans.find(x => String(x.loan_id) === String(loanId))
+        const acct = accts.find(x => String(x.id) === String(accountId))
+        if (!loan || !acct) { setStatus('repay-status', false, '数据异常'); return }
+        const remaining = parseFloat(loan.remaining_amount)
+        const balance = parseFloat(acct.balance)
+        if (amount > remaining || amount > balance) { setStatus('repay-status', false, '还款金额超过可用余额或剩余额度'); return }
+        const r = await fetch('/user/repay', { method:'POST', headers:{ 'Content-Type':'application/json','X-CSRF-Token': csrfToken }, body: JSON.stringify({ loan_id: loanId, savings_account_id: accountId, amount, confirm: true }) })
+        const j = await r.json()
+        if (r.status === 200) {
+          setStatus('repay-status', true, '还款成功')
+          loadAccounts(); loadTransactions(); loadUserLoans()
+          document.getElementById('repay-form').reset()
+          setTimeout(() => { document.getElementById('repay-status').style.display = 'none' }, 2000)
+        } else {
+          setStatus('repay-status', false, `还款失败: ${j.message || j.error || ''}`)
+        }
+      } catch (err) {
+        setStatus('repay-status', false, '网络异常或服务不可用')
+      }
+    }
+
     async function changePwd(e) {
       e.preventDefault()
       const o = document.getElementById('old').value
@@ -263,8 +383,8 @@
 
     async function handleTransfer(e) {
       e.preventDefault();
-      const fromAccountId = document.getElementById('transfer-from-account').value;
-      const toAccountId = document.getElementById('transfer-to-account').value;
+      const fromAccountId = parseInt(document.getElementById('transfer-from-account').value);
+      const toAccountId = parseInt(document.getElementById('transfer-to-account').value);
       const amount = parseFloat(document.getElementById('transfer-amount').value);
       const remark = document.getElementById('transfer-remark').value;
 
@@ -385,6 +505,49 @@
       });
     }
 
+    // 根据选定的转出账户更新转入账户列表
+    function updateTransferToAccounts() {
+      const fromAccountSelect = document.getElementById('transfer-from-account');
+      const toAccountSelect = document.getElementById('transfer-to-account');
+      const fromAccountId = fromAccountSelect.value;
+      
+      // 保存当前转入账户的选中值
+      const currentToAccountId = toAccountSelect.value;
+      
+      // 清空转入账户选项
+      toAccountSelect.innerHTML = '';
+      
+      // 添加默认选项
+      const defaultOption = document.createElement('option');
+      defaultOption.value = '';
+      defaultOption.textContent = '请选择账户';
+      toAccountSelect.appendChild(defaultOption);
+      
+      // 如果没有选择转出账户，则显示所有账户
+      if (!fromAccountId) {
+        populateAccountSelects();
+        return;
+      }
+      
+      // 获取所有账户信息
+      fetch('/user/accounts')
+        .then(response => response.json())
+        .then(accounts => {
+          // 添加除转出账户外的所有有效账户
+          accounts.filter(acc => acc.type !== 'closed' && acc.id != fromAccountId).forEach(acc => {
+            const option = document.createElement('option');
+            option.value = acc.id;
+            option.textContent = `${acc.account_no} (余额: ¥${parseFloat(acc.balance).toFixed(2)})`;
+            toAccountSelect.appendChild(option);
+          });
+          
+          // 恢复之前选中的转入账户（如果它不是转出账户且仍然有效）
+          if (currentToAccountId && currentToAccountId !== fromAccountId) {
+            toAccountSelect.value = currentToAccountId;
+          }
+        });
+    }
+
     window.addEventListener('load', async () => { 
       await getCsrf(); 
       loadMe(); 
@@ -392,6 +555,8 @@
       loadAccounts();
       loadTransactions();
       populateAccountSelects();
+      loadUserLoans();
+      populateSavingsAccounts();
 
       // 绑定表单提交事件
       document.getElementById('change-pwd-form').addEventListener('submit', changePwd);
@@ -399,6 +564,10 @@
       document.getElementById('deposit-form').addEventListener('submit', handleDeposit);
       document.getElementById('withdraw-form').addEventListener('submit', handleWithdraw);
       document.getElementById('transfer-form').addEventListener('submit', handleTransfer);
+      document.getElementById('repay-form').addEventListener('submit', handleRepay);
+
+      // 绑定转账账户选择事件
+      document.getElementById('transfer-from-account').addEventListener('change', updateTransferToAccounts);
 
       // 绑定标签页切换事件
       document.querySelectorAll('.tab').forEach(tab => {
@@ -414,7 +583,15 @@
         if (activeTab === 'transactions' || activeTab === 'overview') {
           loadTransactions();
         }
+        if (activeTab === 'loans') {
+          loadUserLoans();
+        }
       }, 30000); // 每30秒刷新一次
+    })
+
+    document.addEventListener('change', (e) => {
+      if (e.target && e.target.id === 'repay-loan') { updateRepayDue() }
+      if (e.target && e.target.id === 'repay-account') { validateRepayAmount() }
     })
   </script>
 </head>
@@ -439,6 +616,7 @@
       <div class="tab" data-tab="deposit">存款</div>
       <div class="tab" data-tab="withdraw">取款</div>
       <div class="tab" data-tab="transfer">转账</div>
+      <div class="tab" data-tab="loans">贷款管理</div>
       <div class="tab" data-tab="settings">账户设置</div>
     </div>
 
@@ -453,13 +631,13 @@
           <h3>账户总览</h3>
           <table>
             <thead>
-              <tr>
-                <th>账户号</th>
-                <th>类型</th>
-                <th>余额</th>
-                <th>开户日期</th>
-                <th>详情</th>
-              </tr>
+            <tr>
+              <th>账户号</th>
+              <th>类型</th>
+              <th>余额</th>
+              <th>开户日期</th>
+              <th>详情</th>
+            </tr>
             </thead>
             <tbody id="accounts-list">
               <tr>
@@ -474,11 +652,10 @@
         <table>
           <thead>
             <tr>
-              <th>账户</th>
-              <th>类型</th>
-              <th>金额</th>
-              <th>余额</th>
-              <th>时间</th>
+              <th>贷款号</th>
+              <th>贷款本金</th>
+              <th>未还款金额</th>
+              <th>终止日期</th>
             </tr>
           </thead>
           <tbody id="transactions-list">
@@ -488,6 +665,49 @@
           </tbody>
         </table>
       </div>
+    </div>
+
+    <div class="panel" id="panel-loans">
+      <div class="card">
+        <h3>我的未结清贷款</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>贷款号</th>
+              <th>剩余本金</th>
+              <th>最近到期</th>
+            </tr>
+          </thead>
+          <tbody id="loans-list"><tr><td colspan="4">加载中...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>还款操作</h3>
+        <form id="repay-form">
+          <div class="form-group">
+            <label for="repay-loan">选择贷款</label>
+            <select id="repay-loan" required></select>
+          </div>
+          <div class="form-group">
+            <label for="repay-account">还款账户（储蓄）</label>
+            <select id="repay-account" required></select>
+          </div>
+          <div class="form-group">
+            <label for="repay-amount">还款金额</label>
+            <input type="number" id="repay-amount" step="0.01" min="0.01" placeholder="请输入还款金额">
+            <div class="status" id="repay-max-tip"></div>
+          </div>
+          <div class="form-group">
+            <label>贷款终止日期</label>
+            <div class="status" id="loan-end-date">-</div>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" type="submit">确认还款</button>
+          </div>
+          <div id="repay-status" class="alert" style="display:none;"></div>
+        </form>
+      </div>
+      
     </div>
 
     <!-- 我的账户面板 -->

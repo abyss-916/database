@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, send_from_directory, session, redirect
-from db import get_conn, init_db, execute, query_all, get_config, begin_transaction, execute_with_conn
+from db import get_conn, init_db, execute, query_all, get_config, begin_transaction, execute_with_conn, map_db_error, is_db_error
 import os
 import secrets
 import hashlib
@@ -7,6 +7,8 @@ import datetime
 import re
 import json
 import psycopg2
+import threading
+import time
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(16))
@@ -90,7 +92,7 @@ def register():
         return jsonify({'ok': False, 'error': 'invalid'}), 400
     if username == 'administrator':
         return jsonify({'ok': False, 'error': 'forbidden'}), 403
-    if not re.fullmatch(r'[A-Za-z0-9]{4,12}', username or ''):
+    if not re.fullmatch(r'[A-Za-z0-9]{1,12}', username or ''):
         return jsonify({'ok': False, 'error': 'bad_username'}), 400
     conn = get_conn()
     cur = conn.cursor()
@@ -109,6 +111,9 @@ def register():
         return jsonify({'ok': True})
     except Exception as e:
         conn.rollback()
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
         return jsonify({'ok': False, 'error': str(e)}), 400
     finally:
         cur.close()
@@ -256,6 +261,7 @@ def admin_api_query_branch():
     if fuzzy:
         rows = query_all('SELECT id, union_no, name, city FROM branch WHERE union_no ILIKE %s ORDER BY id', ('%' + union_no + '%',))
         result = [{
+            'id': r['id'],
             'union_no': r['union_no'],
             'name': r['name'],
             'city': r['city'],
@@ -270,6 +276,7 @@ def admin_api_query_branch():
         return jsonify({'ok': False, 'error': '未找到支行'}), 404
     r = rows[0]
     return jsonify({
+        'id': r['id'],
         'union_no': r['union_no'],
         'name': r['name'],
         'city': r['city'],
@@ -329,6 +336,7 @@ def admin_api_query_account():
             owners = query_all('SELECT customer_id FROM account_customer WHERE account_id=%s', (a['id'],))
             last = query_all('SELECT MAX(last_access_date) AS last_access_date FROM account_customer WHERE account_id=%s', (a['id'],))
             result.append({
+                'id': a['id'],
                 'account_no': a['account_no'],
                 'created_at': a['created_at'],
                 'last_access_date': (last[0]['last_access_date'] if last and last[0] else None),
@@ -343,6 +351,7 @@ def admin_api_query_account():
     owners = query_all('SELECT customer_id FROM account_customer WHERE account_id=%s', (a['id'],))
     last = query_all('SELECT MAX(last_access_date) AS last_access_date FROM account_customer WHERE account_id=%s', (a['id'],))
     return jsonify({
+        'id': a['id'],
         'account_no': a['account_no'],
         'created_at': a['created_at'],
         'last_access_date': (last[0]['last_access_date'] if last and last[0] else None),
@@ -401,6 +410,7 @@ def admin_api_query_loan():
             paid = float(repaid[0]['total']) if repaid and repaid[0] else 0.0
             remain = float(l['amount']) - paid
             result.append({
+                'id': l['id'],
                 'loan_no': l['loan_no'],
                 'amount': float(l['amount']),
                 'branch_union_no': (b[0]['union_no'] if b else None),
@@ -419,6 +429,7 @@ def admin_api_query_loan():
     paid = float(repaid[0]['total']) if repaid and repaid[0] else 0.0
     remain = float(l['amount']) - paid
     return jsonify({
+        'id': l['id'],
         'loan_no': l['loan_no'],
         'amount': float(l['amount']),
         'branch_union_no': (b[0]['union_no'] if b else None),
@@ -457,7 +468,10 @@ def health():
         conn.close()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({"ok": False, "error": '系统繁忙，请稍后再试'}), 500
 
 @app.get('/db-config')
 def db_config():
@@ -527,7 +541,45 @@ def initdb():
         conn.close()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({"ok": False, "error": '系统繁忙，请稍后再试'}), 500
+
+@app.post('/migrate-db')
+def migrate_db():
+    """数据库迁移接口，添加缺失的字段"""
+    if _require_login('admin'):
+        return _require_login('admin')
+    
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        
+        # 检查并添加account表的closed_at字段
+        cur.execute("""
+            DO $$
+            BEGIN
+              IF NOT EXISTS (
+                SELECT 1 
+                FROM information_schema.columns 
+                WHERE table_name = 'account' AND column_name = 'closed_at'
+              ) THEN
+                ALTER TABLE account ADD COLUMN closed_at TIMESTAMP;
+              END IF;
+            END$$;
+        """)
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({"ok": True, "message": "数据库迁移完成"})
+    except Exception as e:
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({"ok": False, "error": '系统繁忙，请稍后再试'}), 500
 
 @app.get('/branches')
 def list_branches():
@@ -560,7 +612,10 @@ def create_branch():
         execute('INSERT INTO branch(union_no, name, city) VALUES(%s,%s,%s)', (union_no, name, city))
         return jsonify({"ok": True, "message": "分行添加成功"})
     except Exception as e:
-        return jsonify({'ok': False, 'error': f"添加分行失败: {str(e)}"}), 500
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({'ok': False, 'error': '添加分行失败'}), 500
 
 @app.post('/branches/update')
 def update_branch():
@@ -581,7 +636,10 @@ def update_branch():
         execute('UPDATE branch SET name=%s, city=%s WHERE id=%s', (name, city, bid))
         return jsonify({'ok': True, "message": "分行信息更新成功"})
     except Exception as e:
-        return jsonify({'ok': False, "error": f"更新分行信息失败: {str(e)}"}), 500
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({'ok': False, "error": "更新分行信息失败"}), 500
 
 @app.post('/branches/delete')
 def delete_branch():
@@ -589,12 +647,36 @@ def delete_branch():
         return _require_login('admin')
     data = request.get_json(force=True)
     bid = data.get('id')
-    
+    if not bid:
+        return jsonify({'ok': False, 'error': 'invalid_params'}), 400
+    conn = begin_transaction()
+    cur = conn.cursor()
     try:
-        execute('DELETE FROM branch WHERE id=%s', (bid,))
+        cur.execute('SELECT id FROM loan WHERE branch_id=%s', (bid,))
+        loan_ids = [row[0] for row in cur.fetchall()]
+        for lid in loan_ids:
+            cur.execute('DELETE FROM loan_customer WHERE loan_id=%s', (lid,))
+            cur.execute('DELETE FROM repayment_schedule WHERE loan_id=%s', (lid,))
+            cur.execute('DELETE FROM repayment WHERE loan_id=%s', (lid,))
+            cur.execute('DELETE FROM loan WHERE id=%s', (lid,))
+        cur.execute('DELETE FROM branch WHERE id=%s', (bid,))
+        conn.commit()
+        cur.close(); conn.close()
+        execute('INSERT INTO admin_activity_log(user_id, action, meta) VALUES(%s,%s,%s)', (session.get('user_id'), 'delete_branch', json.dumps({'id': bid})))
         return jsonify({'ok': True, "message": "分行删除成功"})
     except Exception as e:
-        return jsonify({'ok': False, "error": f"删除分行失败: {str(e)}"}), 500
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        try:
+            cur.close(); conn.close()
+        except Exception:
+            pass
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({'ok': False, "error": "删除分行失败"}), 500
 
 @app.get('/employees')
 def list_employees():
@@ -619,7 +701,10 @@ def create_employee():
         execute('INSERT INTO employee(name, phone, hire_date, manager_id) VALUES(%s,%s,%s,%s)', (name, phone, hire_date, manager_id))
         return jsonify({"ok": True, "message": "员工添加成功"})
     except Exception as e:
-        return jsonify({"ok": False, "error": f"添加员工失败: {str(e)}"}), 500
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({"ok": False, "error": "添加员工失败"}), 500
 
 @app.get('/dependents')
 def list_dependents():
@@ -641,7 +726,10 @@ def create_dependent():
         execute('INSERT INTO dependent(employee_id, name, relationship) VALUES(%s,%s,%s)', (employee_id, name, relationship))
         return jsonify({"ok": True, "message": "家属添加成功"})
     except Exception as e:
-        return jsonify({"ok": False, "error": f"添加家属失败: {str(e)}"}), 500
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({"ok": False, "error": "添加家属失败"}), 500
 
 @app.get('/customers')
 def list_customers():
@@ -663,11 +751,51 @@ def create_customer():
     if not name or not identity_no or not city or not street:
         return jsonify({'ok': False, 'error': '参数不完整'}), 400
     
+    conn = None
+    cur = None
     try:
+        # 创建客户
         execute('INSERT INTO customer(name, identity_no, city, street, assistant_employee_id) VALUES(%s,%s,%s,%s,%s)', (name, identity_no, city, street, assistant_employee_id))
-        return jsonify({"ok": True, "message": "客户添加成功"})
+        
+        # 获取刚创建的客户ID
+        customer = query_all('SELECT id FROM customer WHERE identity_no=%s ORDER BY id DESC LIMIT 1', (identity_no,))
+        if customer and customer[0]:
+            customer_id = customer[0]['id']
+            
+            # 为该客户创建用户账号，使用客户姓名作为用户名，默认密码123456
+            password = '123456'
+            ph, ps = _hash_password(password)
+            
+            # 使用独立的连接和事务来创建用户账号
+            conn = get_conn()
+            cur = conn.cursor()
+            
+            # 创建用户账号
+            cur.execute('INSERT INTO app_user(username, password_hash, password_salt, role) VALUES(%s,%s,%s,%s) ON CONFLICT (username) DO NOTHING RETURNING id', 
+                       (name, ph, ps, 'user'))
+            
+            user_id = cur.fetchone()
+            if user_id:
+                user_id = user_id[0]
+                # 创建用户和客户的关联
+                cur.execute('INSERT INTO user_customer(user_id, customer_id) VALUES(%s,%s) ON CONFLICT DO NOTHING', 
+                           (user_id, customer_id))
+            
+            conn.commit()
+        
+        return jsonify({"ok": True, "message": "客户添加成功，已同步创建用户账号"})
     except Exception as e:
-        return jsonify({"ok": False, "error": f"添加客户失败: {str(e)}"}), 500
+        if conn:
+            conn.rollback()
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({"ok": False, "error": "添加客户失败"}), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 @app.get('/accounts')
 def list_accounts():
@@ -706,16 +834,65 @@ def create_account():
             cur.execute('INSERT INTO account_customer(account_id, customer_id) VALUES(%s,%s) ON CONFLICT DO NOTHING', (account_id, customer_id))
         conn.commit()
         return jsonify({"ok": True, "account_id": account_id, "message": "账户创建成功", "account_no": account_no})
-    except psycopg2.IntegrityError as e:
-        if conn:
-            conn.rollback()
-        if 'account_no' in str(e):
-            return jsonify({"ok": False, "error": "账户号已存在"}), 400
-        return jsonify({"ok": False, "error": f"数据库约束错误: {str(e)}"}), 400
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({"ok": False, "error": f"创建账户失败: {str(e)}"}), 500
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({"ok": False, "error": "创建账户失败"}), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+@app.post('/loans/<int:loan_id>/status')
+def update_loan_status(loan_id):
+    if _require_login('admin'):
+        return _require_login('admin')
+    data = request.get_json(force=True)
+    status = data.get('status')
+    confirm = data.get('confirm')
+    remark = data.get('remark', '')
+    if status not in ('APPROVED','DISBURSED','SETTLED'):
+        return jsonify({'ok': False, 'error': 'invalid_status'}), 400
+    if not confirm:
+        return jsonify({'ok': False, 'error': 'need_confirm'}), 400
+    admin_id = session.get('user_id')
+    conn = None
+    cur = None
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute('SELECT status FROM loan WHERE id=%s FOR UPDATE', (loan_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({'ok': False, 'error': 'not_found'}), 404
+        old = row[0]
+        ok = False
+        if old == 'PENDING' and status == 'APPROVED':
+            ok = True
+        elif old == 'APPROVED' and status == 'DISBURSED':
+            ok = True
+        elif old in ('DISBURSED','APPROVED') and status == 'SETTLED':
+            ok = True
+        if not ok:
+            return jsonify({'ok': False, 'error': 'invalid_transition'}), 400
+        if status == 'SETTLED':
+            cur.execute('UPDATE loan SET status=%s, settled_at=NOW() WHERE id=%s', (status, loan_id))
+        else:
+            cur.execute('UPDATE loan SET status=%s WHERE id=%s', (status, loan_id))
+        conn.commit()
+        execute('INSERT INTO admin_activity_log(user_id, action, meta) VALUES(%s,%s,%s)', (admin_id, 'loan_status_update', json.dumps({'loan_id': loan_id, 'from': old, 'to': status, 'remark': remark})))
+        return jsonify({'ok': True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({'ok': False, 'error': str(e)}), 400
     finally:
         if cur:
             cur.close()
@@ -734,7 +911,10 @@ def add_account_owner():
         execute('INSERT INTO account_customer(account_id, customer_id) VALUES(%s,%s) ON CONFLICT DO NOTHING', (account_id, customer_id))
         return jsonify({"ok": True, "message": "账户所有者添加成功"})
     except Exception as e:
-        return jsonify({"ok": False, "error": f"添加账户所有者失败: {str(e)}"}), 500
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({"ok": False, "error": "添加账户所有者失败"}), 500
 
 @app.post('/account_access')
 def update_access():
@@ -749,7 +929,244 @@ def update_access():
         execute('INSERT INTO account_customer(account_id, customer_id, last_access_date) VALUES(%s,%s,%s) ON CONFLICT (account_id, customer_id) DO UPDATE SET last_access_date = EXCLUDED.last_access_date', (account_id, customer_id, date))
         return jsonify({"ok": True, "message": "账户访问记录更新成功"})
     except Exception as e:
-        return jsonify({"ok": False, "error": f"更新账户访问记录失败: {str(e)}"}), 500
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({"ok": False, "error": "更新账户访问记录失败"}), 500
+
+@app.post('/admin/branches/delete')
+def admin_delete_branch():
+    if _require_login('admin'):
+        return _require_login('admin')
+    data = request.get_json(force=True)
+    bid = data.get('id')
+    if not bid:
+        return jsonify({'ok': False, 'error': 'invalid_params'}), 400
+    conn = begin_transaction()
+    cur = conn.cursor()
+    try:
+        cur.execute('SELECT id FROM loan WHERE branch_id=%s', (bid,))
+        loan_ids = [row[0] for row in cur.fetchall()]
+        for lid in loan_ids:
+            cur.execute('DELETE FROM loan_customer WHERE loan_id=%s', (lid,))
+            cur.execute('DELETE FROM repayment_schedule WHERE loan_id=%s', (lid,))
+            cur.execute('DELETE FROM repayment WHERE loan_id=%s', (lid,))
+            cur.execute('DELETE FROM loan WHERE id=%s', (lid,))
+        cur.execute('DELETE FROM branch WHERE id=%s', (bid,))
+        conn.commit()
+        cur.close(); conn.close()
+        execute('INSERT INTO admin_activity_log(user_id, action, meta) VALUES(%s,%s,%s)', (session.get('user_id'), 'delete_branch', json.dumps({'id': bid})))
+        return jsonify({'ok': True})
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        try:
+            cur.close(); conn.close()
+        except Exception:
+            pass
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({'ok': False, 'error': '删除分行失败'}), 500
+
+@app.post('/admin/employees/delete')
+def admin_delete_employee():
+    if _require_login('admin'):
+        return _require_login('admin')
+    data = request.get_json(force=True)
+    eid = data.get('id')
+    confirm = data.get('confirm')
+    code = data.get('code')
+    if not eid or not confirm:
+        return jsonify({'ok': False, 'error': 'invalid_params'}), 400
+    info = _sensitive_codes.get(session.get('user_id'))
+    if not info or info['code'] != code or info['exp'] < datetime.datetime.utcnow():
+        return jsonify({'ok': False, 'error': 'verify'}), 403
+    conn = begin_transaction()
+    cur = conn.cursor()
+    try:
+        cur.execute('DELETE FROM dependent WHERE employee_id=%s', (eid,))
+        cur.execute('UPDATE employee SET manager_id=NULL WHERE manager_id=%s', (eid,))
+        cur.execute('UPDATE customer SET assistant_employee_id=NULL WHERE assistant_employee_id=%s', (eid,))
+        cur.execute('DELETE FROM employee WHERE id=%s', (eid,))
+        conn.commit()
+        cur.close(); conn.close()
+        execute('INSERT INTO admin_activity_log(user_id, action, meta) VALUES(%s,%s,%s)', (session.get('user_id'), 'delete_employee', json.dumps({'id': eid})))
+        return jsonify({'ok': True})
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        try:
+            cur.close(); conn.close()
+        except Exception:
+            pass
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({'ok': False, 'error': '删除员工失败'}), 500
+
+@app.post('/admin/dependents/delete')
+def admin_delete_dependent():
+    if _require_login('admin'):
+        return _require_login('admin')
+    data = request.get_json(force=True)
+    did = data.get('id')
+    confirm = data.get('confirm')
+    code = data.get('code')
+    if not did or not confirm:
+        return jsonify({'ok': False, 'error': 'invalid_params'}), 400
+    info = _sensitive_codes.get(session.get('user_id'))
+    if not info or info['code'] != code or info['exp'] < datetime.datetime.utcnow():
+        return jsonify({'ok': False, 'error': 'verify'}), 403
+    try:
+        execute('DELETE FROM dependent WHERE id=%s', (did,))
+        execute('INSERT INTO admin_activity_log(user_id, action, meta) VALUES(%s,%s,%s)', (session.get('user_id'), 'delete_dependent', json.dumps({'id': did})))
+        return jsonify({'ok': True})
+    except Exception as e:
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({'ok': False, 'error': '删除家属失败'}), 500
+
+@app.post('/admin/customers/delete')
+def admin_delete_customer():
+    if _require_login('admin'):
+        return _require_login('admin')
+    data = request.get_json(force=True)
+    cid = data.get('id')
+    if not cid:
+        return jsonify({'ok': False, 'error': 'invalid_params'}), 400
+    conn = begin_transaction()
+    cur = conn.cursor()
+    try:
+        cur.execute('SELECT id FROM business WHERE customer_id=%s', (cid,))
+        bs_ids = [row[0] for row in cur.fetchall()]
+        for bid_ in bs_ids:
+            cur.execute('DELETE FROM transaction WHERE business_id=%s', (bid_,))
+        cur.execute('DELETE FROM account_customer WHERE customer_id=%s', (cid,))
+        cur.execute('DELETE FROM loan_customer WHERE customer_id=%s', (cid,))
+        cur.execute('DELETE FROM business WHERE customer_id=%s', (cid,))
+        cur.execute('DELETE FROM user_customer WHERE customer_id=%s', (cid,))
+        cur.execute('DELETE FROM customer WHERE id=%s', (cid,))
+        conn.commit()
+        cur.close(); conn.close()
+        execute('INSERT INTO admin_activity_log(user_id, action, meta) VALUES(%s,%s,%s)', (session.get('user_id'), 'delete_customer', json.dumps({'id': cid})))
+        return jsonify({'ok': True})
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        try:
+            cur.close(); conn.close()
+        except Exception:
+            pass
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({'ok': False, 'error': '删除客户失败'}), 500
+
+@app.post('/admin/accounts/delete')
+def admin_delete_account():
+    if _require_login('admin'):
+        return _require_login('admin')
+    data = request.get_json(force=True)
+    aid = data.get('id')
+    confirm = data.get('confirm')
+    code = data.get('code')
+    if not aid or not confirm:
+        return jsonify({'ok': False, 'error': 'invalid_params'}), 400
+    info = _sensitive_codes.get(session.get('user_id'))
+    if not info or info['code'] != code or info['exp'] < datetime.datetime.utcnow():
+        return jsonify({'ok': False, 'error': 'verify'}), 403
+    conn = begin_transaction()
+    cur = conn.cursor()
+    try:
+        cur.execute('DELETE FROM transaction WHERE account_id=%s', (aid,))
+        cur.execute('DELETE FROM transfer WHERE from_account_id=%s OR to_account_id=%s', (aid, aid))
+        cur.execute('DELETE FROM account WHERE id=%s', (aid,))
+        conn.commit()
+        cur.close(); conn.close()
+        execute('INSERT INTO admin_activity_log(user_id, action, meta) VALUES(%s,%s,%s)', (session.get('user_id'), 'delete_account', json.dumps({'id': aid})))
+        return jsonify({'ok': True})
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        try:
+            cur.close(); conn.close()
+        except Exception:
+            pass
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({'ok': False, 'error': '删除账户失败'}), 500
+
+@app.post('/admin/loans/delete')
+def admin_delete_loan():
+    if _require_login('admin'):
+        return _require_login('admin')
+    data = request.get_json(force=True)
+    lid = data.get('id')
+    confirm = data.get('confirm')
+    code = data.get('code')
+    if not lid or not confirm:
+        return jsonify({'ok': False, 'error': 'invalid_params'}), 400
+    info = _sensitive_codes.get(session.get('user_id'))
+    if not info or info['code'] != code or info['exp'] < datetime.datetime.utcnow():
+        return jsonify({'ok': False, 'error': 'verify'}), 403
+    conn = begin_transaction()
+    cur = conn.cursor()
+    try:
+        cur.execute('DELETE FROM loan_customer WHERE loan_id=%s', (lid,))
+        cur.execute('DELETE FROM repayment_schedule WHERE loan_id=%s', (lid,))
+        cur.execute('DELETE FROM repayment WHERE loan_id=%s', (lid,))
+        cur.execute('DELETE FROM loan WHERE id=%s', (lid,))
+        conn.commit()
+        cur.close(); conn.close()
+        execute('INSERT INTO admin_activity_log(user_id, action, meta) VALUES(%s,%s,%s)', (session.get('user_id'), 'delete_loan', json.dumps({'id': lid})))
+        return jsonify({'ok': True})
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        try:
+            cur.close(); conn.close()
+        except Exception:
+            pass
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({'ok': False, 'error': '删除贷款失败'}), 500
+
+@app.post('/admin/repayments/delete')
+def admin_delete_repayment():
+    if _require_login('admin'):
+        return _require_login('admin')
+    data = request.get_json(force=True)
+    rid = data.get('id')
+    confirm = data.get('confirm')
+    code = data.get('code')
+    if not rid or not confirm:
+        return jsonify({'ok': False, 'error': 'invalid_params'}), 400
+    info = _sensitive_codes.get(session.get('user_id'))
+    if not info or info['code'] != code or info['exp'] < datetime.datetime.utcnow():
+        return jsonify({'ok': False, 'error': 'verify'}), 403
+    try:
+        execute('DELETE FROM repayment WHERE id=%s', (rid,))
+        execute('INSERT INTO admin_activity_log(user_id, action, meta) VALUES(%s,%s,%s)', (session.get('user_id'), 'delete_repayment', json.dumps({'id': rid})))
+        return jsonify({'ok': True})
+    except Exception as e:
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({'ok': False, 'error': '删除还款记录失败'}), 500
 
 @app.get('/loans')
 def list_loans():
@@ -757,6 +1174,42 @@ def list_loans():
         return _require_login('admin')
     rows = query_all('SELECT id, loan_no, amount, branch_id FROM loan ORDER BY id')
     return jsonify(rows)
+
+@app.get('/loans/financials')
+def loans_financials():
+    if _require_login('admin'):
+        return _require_login('admin')
+    loans = query_all('SELECT id, loan_no, amount, status, interest_rate, start_date FROM loan ORDER BY id')
+    conn = get_conn()
+    cur = conn.cursor()
+    result = []
+    try:
+        for l in loans:
+            loan_id = l['id']
+            days = 0
+            if l.get('start_date'):
+                days = max((datetime.date.today() - l['start_date']).days, 0)
+            rate = float(l.get('interest_rate') or 0)
+            principal = float(l['amount'])
+            total_interest = round(principal * rate * days / 365.0, 2)
+            repaid_rows = query_all('SELECT COALESCE(SUM(amount),0) AS total FROM repayment WHERE loan_id=%s', (loan_id,))
+            repaid_total = float(repaid_rows[0]['total']) if repaid_rows and repaid_rows[0] else 0.0
+            remaining = round(principal + total_interest - repaid_total, 2)
+            if remaining < 0:
+                remaining = 0.0
+            if remaining <= 0 and l['status'] != 'SETTLED':
+                cur.execute('UPDATE loan SET status=%s, settled_at=NOW() WHERE id=%s', ('SETTLED', loan_id))
+            result.append({
+                'loan_id': loan_id,
+                'loan_no': l['loan_no'],
+                'principal_amount': round(principal, 2),
+                'cumulative_interest': total_interest,
+                'remaining_amount': remaining
+            })
+        conn.commit()
+        return jsonify(result)
+    finally:
+        cur.close(); conn.close()
 
 @app.post('/loans')
 def create_loan():
@@ -767,8 +1220,11 @@ def create_loan():
     amount = data.get('amount')
     branch_id = data.get('branch_id')
     customer_ids = data.get('customer_ids') or []
+    interest_rate = data.get('interest_rate')
+    term_months = data.get('term_months')
+    repayment_method = data.get('repayment_method')
     
-    if not loan_no or not amount or not branch_id:
+    if not loan_no or not amount or not branch_id or interest_rate is None or not term_months or not repayment_method:
         return jsonify({'ok': False, 'error': '参数不完整'}), 400
     if not isinstance(customer_ids, list) or len(customer_ids) < 1:
         return jsonify({'ok': False, 'error': '贷款必须至少由一位客户拥有'}), 400
@@ -777,26 +1233,70 @@ def create_loan():
     for cid in customer_ids:
         if not query_all('SELECT 1 FROM customer WHERE id=%s LIMIT 1', (cid,)):
             return jsonify({'ok': False, 'error': f'客户不存在: {cid}'}), 400
+    if not isinstance(term_months, int) or term_months <= 0:
+        return jsonify({'ok': False, 'error': '期限不合法'}), 400
+    if not isinstance(interest_rate, (int, float)) or interest_rate < 0:
+        return jsonify({'ok': False, 'error': '利率不合法'}), 400
+    if repayment_method not in ('EQUAL_INSTALLMENT','EQUAL_PRINCIPAL'):
+        return jsonify({'ok': False, 'error': '还款方式不合法'}), 400
     
     conn = None
     cur = None
     try:
         conn = get_conn()
         cur = conn.cursor()
-        cur.execute('INSERT INTO loan(loan_no, amount, branch_id) VALUES(%s,%s,%s) RETURNING id', (loan_no, amount, branch_id))
+        start_date = datetime.date.today()
+        cur.execute('INSERT INTO loan(loan_no, amount, branch_id, interest_rate, term_months, repayment_method, status, start_date, end_date) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id', (loan_no, amount, branch_id, interest_rate, term_months, repayment_method, 'PENDING', start_date, None))
         loan_id = cur.fetchone()[0]
         for cid in customer_ids:
             cur.execute('INSERT INTO loan_customer(loan_id, customer_id) VALUES(%s,%s) ON CONFLICT DO NOTHING', (loan_id, cid))
+        monthly_rate = (interest_rate or 0) / 12.0
+        def _add_months(d, m):
+            y = d.year + (d.month - 1 + m) // 12
+            mo = (d.month - 1 + m) % 12 + 1
+            day = min(d.day, [31,29 if (y%4==0 and (y%100!=0 or y%400==0)) else 28,31,30,31,30,31,31,30,31,30,31][mo-1])
+            return datetime.date(y, mo, day)
+        remaining = float(amount)
+        last_due = None
+        if repayment_method == 'EQUAL_INSTALLMENT':
+            r = monthly_rate
+            n = term_months
+            pay = 0.0
+            if r > 0:
+                pay = remaining * r * (1 + r) ** n / ((1 + r) ** n - 1)
+            else:
+                pay = remaining / n
+            pay = round(pay + 1e-8, 2)
+            for i in range(1, term_months + 1):
+                interest = round(remaining * r, 2)
+                principal = pay - interest
+                if i == term_months:
+                    principal = round(remaining, 2)
+                    interest = round(pay - principal, 2) if monthly_rate > 0 else 0.0
+                due_date = _add_months(start_date, i)
+                cur.execute('INSERT INTO repayment_schedule(loan_id, period_no, due_date, principal_due, interest_due, status) VALUES(%s,%s,%s,%s,%s,%s)', (loan_id, i, due_date, principal, interest, 'DUE'))
+                remaining = round(remaining - principal, 2)
+                last_due = due_date
+        else:
+            principal_each = round(remaining / term_months, 2)
+            for i in range(1, term_months + 1):
+                interest = round(remaining * monthly_rate, 2)
+                principal = principal_each if i < term_months else round(remaining, 2)
+                due_date = _add_months(start_date, i)
+                cur.execute('INSERT INTO repayment_schedule(loan_id, period_no, due_date, principal_due, interest_due, status) VALUES(%s,%s,%s,%s,%s,%s)', (loan_id, i, due_date, principal, interest, 'DUE'))
+                remaining = round(remaining - principal, 2)
+                last_due = due_date
+        if last_due:
+            cur.execute('UPDATE loan SET end_date=%s WHERE id=%s', (last_due, loan_id))
         conn.commit()
         return jsonify({"ok": True, "loan_id": loan_id, "message": "贷款创建成功"})
-    except psycopg2.IntegrityError as e:
-        if conn:
-            conn.rollback()
-        return jsonify({"ok": False, "error": f"数据库约束错误: {str(e)}"}), 400
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({"ok": False, "error": f"创建贷款失败: {str(e)}"}), 500
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({"ok": False, "error": "创建贷款失败"}), 500
     finally:
         if cur:
             cur.close()
@@ -832,7 +1332,10 @@ def create_repayment():
         execute('INSERT INTO repayment(loan_id, batch_no, paid_at, amount, savings_account_id) VALUES(%s,%s,%s,%s,%s)', (loan_id, batch_no, paid_at, amount, savings_account_id))
         return jsonify({"ok": True, "message": "还款记录添加成功"})
     except Exception as e:
-        return jsonify({'ok': False, 'error': f'添加还款记录失败: {str(e)}'}), 500
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        return jsonify({'ok': False, 'error': '添加还款记录失败'}), 500
 
 @app.get('/admin/query/customers')
 def admin_query_customers():
@@ -921,11 +1424,34 @@ def admin_batch_delete():
     cur = conn.cursor()
     try:
         for i in ids:
-            cur.execute(f'DELETE FROM {table} WHERE id=%s', (i,))
+            if table == 'branch':
+                cur.execute('SELECT id FROM loan WHERE branch_id=%s', (i,))
+                loan_ids = [row[0] for row in cur.fetchall()]
+                for lid in loan_ids:
+                    cur.execute('DELETE FROM loan_customer WHERE loan_id=%s', (lid,))
+                    cur.execute('DELETE FROM repayment_schedule WHERE loan_id=%s', (lid,))
+                    cur.execute('DELETE FROM repayment WHERE loan_id=%s', (lid,))
+                    cur.execute('DELETE FROM loan WHERE id=%s', (lid,))
+                cur.execute('DELETE FROM branch WHERE id=%s', (i,))
+            elif table == 'customer':
+                cur.execute('SELECT id FROM business WHERE customer_id=%s', (i,))
+                bs_ids = [row[0] for row in cur.fetchall()]
+                for bid_ in bs_ids:
+                    cur.execute('DELETE FROM transaction WHERE business_id=%s', (bid_,))
+                cur.execute('DELETE FROM account_customer WHERE customer_id=%s', (i,))
+                cur.execute('DELETE FROM loan_customer WHERE customer_id=%s', (i,))
+                cur.execute('DELETE FROM business WHERE customer_id=%s', (i,))
+                cur.execute('DELETE FROM user_customer WHERE customer_id=%s', (i,))
+                cur.execute('DELETE FROM customer WHERE id=%s', (i,))
+            else:
+                cur.execute(f'DELETE FROM {table} WHERE id=%s', (i,))
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:
         conn.rollback()
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
         return jsonify({'ok': False, 'error': str(e)}), 400
     finally:
         cur.close()
@@ -1044,6 +1570,9 @@ def deposit():
         conn.rollback()
         cur.close()
         conn.close()
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
         return jsonify({'ok': False, 'error': str(e)}), 400
 
 @app.post('/user/withdraw')
@@ -1127,6 +1656,9 @@ def withdraw():
         conn.rollback()
         cur.close()
         conn.close()
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
         return jsonify({'ok': False, 'error': str(e)}), 400
 
 @app.post('/user/transfer')
@@ -1140,6 +1672,13 @@ def transfer():
     to_account_id = data.get('to_account_id')
     amount = data.get('amount')
     remark = data.get('remark', '')
+    
+    # 确保账户ID是整数类型
+    try:
+        from_account_id = int(from_account_id)
+        to_account_id = int(to_account_id)
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'error': 'invalid_params'}), 400
     
     if not from_account_id or not to_account_id or not amount or amount <= 0:
         return jsonify({'ok': False, 'error': 'invalid_params'}), 400
@@ -1187,6 +1726,15 @@ def transfer():
         
         if not cur.fetchone():
             raise Exception("转出账户不属于该用户")
+            
+        # 确认转入账户也属于该客户
+        cur.execute("""
+            SELECT 1 FROM account_customer 
+            WHERE account_id = %s AND customer_id = %s
+        """, (to_account_id, customer_id))
+        
+        if not cur.fetchone():
+            raise Exception("转入账户不属于该用户")
         
         # 检查余额
         if from_account['balance'] < amount:
@@ -1255,6 +1803,9 @@ def transfer():
         conn.rollback()
         cur.close()
         conn.close()
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
         return jsonify({'ok': False, 'error': str(e)}), 400
 
 @app.post('/user/create-account')
@@ -1319,7 +1870,10 @@ def user_create_account():
                 conn.rollback()
                 conn.close()
             except:
-                pass  # 忽略关闭连接时的任何错误
+                pass
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
         return jsonify({'ok': False, 'error': str(e)}), 400
 
 @app.post('/user/close-account-request')
@@ -1359,7 +1913,7 @@ def user_close_account_request():
     try:
         if account['balance'] == 0:
             # 余额为0，直接注销
-            execute("UPDATE account SET type = 'closed' WHERE id = %s", (account_id,))
+            execute("UPDATE account SET type = 'closed', closed_at = NOW() WHERE id = %s", (account_id,))
             
             # 记录活动日志
             execute('INSERT INTO activity_log(user_id, action, meta) VALUES(%s,%s,%s)', 
@@ -1383,6 +1937,9 @@ def user_close_account_request():
             return jsonify({'ok': True, 'message': '账户注销申请已提交，等待管理员审批'})
         
     except Exception as e:
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
         return jsonify({'ok': False, 'error': str(e)}), 400
 
 @app.get('/user/accounts')
@@ -1410,6 +1967,219 @@ def list_user_accounts():
     
     return jsonify(rows)
 
+@app.get('/user/savings-accounts')
+def list_user_savings_accounts():
+    if _require_login('user'):
+        return _require_login('user')
+    uid = session.get('user_id')
+    customer_row = query_all('SELECT customer_id FROM user_customer WHERE user_id=%s', (uid,))
+    if not customer_row:
+        return jsonify([])
+    customer_id = customer_row[0]['customer_id']
+    rows = query_all("""
+        SELECT a.id, a.account_no, a.balance
+        FROM account a
+        JOIN account_customer ac ON a.id = ac.account_id
+        WHERE ac.customer_id = %s AND a.type = 'savings' AND (a.closed_at IS NULL)
+        ORDER BY a.id
+    """, (customer_id,))
+    return jsonify(rows)
+
+@app.get('/user/loans/open')
+def list_user_open_loans():
+    if _require_login('user'):
+        return _require_login('user')
+    uid = session.get('user_id')
+    customer_row = query_all('SELECT customer_id FROM user_customer WHERE user_id=%s', (uid,))
+    if not customer_row:
+        return jsonify([])
+    customer_id = customer_row[0]['customer_id']
+    loans = query_all("""
+        SELECT l.id, l.loan_no, l.amount, l.status, l.end_date, l.interest_rate, l.start_date
+        FROM loan l
+        JOIN loan_customer lc ON l.id = lc.loan_id
+        WHERE lc.customer_id = %s AND l.status <> 'SETTLED'
+        ORDER BY l.id
+    """, (customer_id,))
+    result = []
+    for l in loans:
+        days = 0
+        if l.get('start_date'):
+            days = max((datetime.date.today() - l['start_date']).days, 0)
+        rate = float(l.get('interest_rate') or 0)
+        principal = float(l['amount'])
+        accrued = round(principal * rate * days / 365.0, 2)
+        repaid_rows = query_all('SELECT COALESCE(SUM(amount),0) AS total FROM repayment WHERE loan_id=%s', (l['id'],))
+        repaid_total = float(repaid_rows[0]['total']) if repaid_rows and repaid_rows[0] else 0.0
+        remain = round(principal + accrued - repaid_total, 2)
+        if remain < 0:
+            remain = 0.0
+        result.append({'loan_id': l['id'], 'loan_no': l['loan_no'], 'principal_amount': round(principal,2), 'remaining_amount': remain, 'end_date': l.get('end_date')})
+    return jsonify(result)
+
+@app.get('/user/loan/<int:loan_id>/schedule')
+def get_user_loan_schedule(loan_id):
+    if _require_login('user'):
+        return _require_login('user')
+    uid = session.get('user_id')
+    customer_row = query_all('SELECT customer_id FROM user_customer WHERE user_id=%s', (uid,))
+    if not customer_row:
+        return jsonify([])
+    customer_id = customer_row[0]['customer_id']
+    owned = query_all('SELECT 1 FROM loan_customer WHERE loan_id=%s AND customer_id=%s', (loan_id, customer_id))
+    if not owned:
+        return jsonify([])
+    rows = query_all('SELECT period_no, due_date, principal_due, interest_due, status FROM repayment_schedule WHERE loan_id=%s ORDER BY period_no', (loan_id,))
+    return jsonify(rows)
+
+@app.get('/user/loan/<int:loan_id>/repayments')
+def get_user_loan_repayments(loan_id):
+    if _require_login('user'):
+        return _require_login('user')
+    uid = session.get('user_id')
+    customer_row = query_all('SELECT customer_id FROM user_customer WHERE user_id=%s', (uid,))
+    if not customer_row:
+        return jsonify([])
+    customer_id = customer_row[0]['customer_id']
+    owned = query_all('SELECT 1 FROM loan_customer WHERE loan_id=%s AND customer_id=%s', (loan_id, customer_id))
+    if not owned:
+        return jsonify([])
+    rows = query_all("""
+        SELECT r.paid_at, r.amount, a.account_no
+        FROM repayment r
+        JOIN savings_account sa ON r.savings_account_id = sa.account_id
+        JOIN account a ON sa.account_id = a.id
+        WHERE r.loan_id = %s
+        ORDER BY r.paid_at DESC
+    """, (loan_id,))
+    return jsonify(rows)
+
+@app.post('/user/repay')
+def user_repay():
+    if _require_login('user'):
+        return _require_login('user')
+    data = request.get_json(force=True)
+    loan_id = data.get('loan_id')
+    savings_account_id = data.get('savings_account_id')
+    amount = data.get('amount')
+    confirm = data.get('confirm')
+    try:
+        loan_id = int(loan_id)
+        savings_account_id = int(savings_account_id)
+        amount = float(amount)
+    except Exception:
+        return jsonify({'ok': False, 'error': 'invalid_params'}), 400
+    if not loan_id or not savings_account_id or amount <= 0:
+        return jsonify({'ok': False, 'error': 'invalid_params'}), 400
+    if not confirm:
+        return jsonify({'ok': False, 'error': 'need_confirm'}), 400
+    uid = session.get('user_id')
+    customer_row = query_all('SELECT customer_id FROM user_customer WHERE user_id=%s', (uid,))
+    if not customer_row:
+        return jsonify({'ok': False, 'error': 'no_customer'}), 400
+    customer_id = customer_row[0]['customer_id']
+    conn = begin_transaction()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cur.execute('SELECT id, type, balance, closed_at FROM account WHERE id=%s FOR UPDATE', (savings_account_id,))
+        acc = cur.fetchone()
+        if not acc or acc['type'] != 'savings' or acc.get('closed_at'):
+            raise Exception('invalid_account')
+        cur.execute('SELECT 1 FROM account_customer WHERE account_id=%s AND customer_id=%s', (savings_account_id, customer_id))
+        if not cur.fetchone():
+            raise Exception('not_owner')
+        cur.execute('SELECT 1 FROM savings_account WHERE account_id=%s', (savings_account_id,))
+        if not cur.fetchone():
+            raise Exception('invalid_account')
+        cur.execute('SELECT 1 FROM loan_customer WHERE loan_id=%s AND customer_id=%s', (loan_id, customer_id))
+        if not cur.fetchone():
+            raise Exception('not_owner')
+        cur.execute('SELECT id, amount, status, interest_rate, start_date FROM loan WHERE id=%s FOR UPDATE', (loan_id,))
+        loan_row = cur.fetchone()
+        if not loan_row:
+            raise Exception('loan_not_found')
+        if loan_row['status'] == 'SETTLED':
+            raise Exception('settled')
+        days = 0
+        if loan_row.get('start_date'):
+            days = max((datetime.date.today() - loan_row['start_date']).days, 0)
+        rate = float(loan_row.get('interest_rate') or 0)
+        principal = float(loan_row['amount'])
+        accrued = round(principal * rate * days / 365.0, 2)
+        cur.execute('SELECT COALESCE(SUM(amount),0) FROM repayment WHERE loan_id=%s', (loan_id,))
+        repaid_total = float(cur.fetchone()[0] or 0.0)
+        outstanding = round(principal + accrued - repaid_total, 2)
+        pay = round(float(amount), 2)
+        tol = 0.005
+        if pay <= 0:
+            raise Exception('amount_range')
+        if pay > outstanding + tol:
+            raise Exception('amount_range')
+        if pay > outstanding:
+            pay = outstanding
+        if float(acc['balance']) < float(pay):
+            raise Exception('insufficient')
+        new_balance = round(float(acc['balance']) - float(pay), 2)
+        cur.execute('UPDATE account SET balance=%s WHERE id=%s', (new_balance, savings_account_id))
+        bn = secrets.token_hex(6)
+        cur.execute("""
+            INSERT INTO business(business_type, customer_id, status, remark)
+            VALUES(%s, %s, %s, %s) RETURNING id
+        """, ('REPAYMENT', customer_id, 'COMPLETED', ''))
+        business_id = cur.fetchone()['id']
+        cur.execute("""
+            INSERT INTO repayment(loan_id, batch_no, paid_at, amount, savings_account_id)
+            VALUES(%s, %s, %s, %s, %s)
+        """, (loan_id, bn, datetime.date.today(), pay, savings_account_id))
+        cur.execute("""
+            INSERT INTO transaction(account_id, business_id, txn_type, amount, balance_after, remark)
+            VALUES(%s, %s, %s, %s, %s, %s)
+        """, (savings_account_id, business_id, 'REPAYMENT', pay, new_balance, ''))
+        new_outstanding = round(outstanding - pay, 2)
+        if new_outstanding <= 0:
+            cur.execute('UPDATE loan SET status=%s, settled_at=NOW() WHERE id=%s', ('SETTLED', loan_id))
+        else:
+            try:
+                cur.execute('UPDATE loan SET outstanding_balance=%s WHERE id=%s', (new_outstanding, loan_id))
+            except Exception:
+                pass
+        conn.commit()
+        cur.close()
+        conn.close()
+        execute('INSERT INTO activity_log(user_id, action, meta) VALUES(%s,%s,%s)', (uid, 'repayment', json.dumps({'loan_id': loan_id, 'paid_amount': float(pay), 'account_id': savings_account_id})))
+        return jsonify({'ok': True, 'balance': new_balance, 'paid_amount': float(pay)})
+    except Exception as e:
+        try:
+            if conn and not conn.closed:
+                conn.rollback()
+        except Exception:
+            pass
+        try:
+            if cur:
+                cur.close()
+        except Exception:
+            pass
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
+        err = str(e)
+        msg_map = {
+            'invalid_params': '参数不完整或格式不正确',
+            'need_confirm': '缺少确认标记',
+            'invalid_account': '账户无效或已注销',
+            'not_owner': '账户或贷款不属于当前用户',
+            'loan_not_found': '贷款不存在',
+            'settled': '贷款已结清',
+            'amount_range': '还款金额不合法或超过剩余应还额',
+            'insufficient': '账户余额不足'
+        }
+        return jsonify({'ok': False, 'error': err, 'message': msg_map.get(err, err)}), 400
+
 @app.get('/user/transactions')
 def list_user_transactions():
     """列出用户的交易记录"""
@@ -1435,6 +2205,40 @@ def list_user_transactions():
     
     return jsonify(rows)
 
+@app.get('/admin/closed-accounts')
+def admin_get_closed_accounts():
+    """获取已关闭账户列表及存活时间信息"""
+    if _require_login('admin'):
+        return _require_login('admin')
+    
+    try:
+        rows = query_all('''
+            SELECT a.id, a.account_no, a.closed_at,
+                   EXTRACT(EPOCH FROM (NOW() - a.closed_at))/3600 as survive_hours
+            FROM account a
+            WHERE a.type = 'closed' AND a.closed_at IS NOT NULL
+            ORDER BY a.closed_at DESC
+        ''')
+        
+        # 处理数据格式
+        result = []
+        for row in rows:
+            survive_hours = row['survive_hours']
+            status = '待清理' if survive_hours > 24 else '保留中'
+            
+            result.append({
+                'id': row['id'],
+                'account_no': row['account_no'],
+                'closed_at': row['closed_at'].strftime('%Y-%m-%d %H:%M:%S') if row['closed_at'] else '',
+                'survive_time': f'{survive_hours:.2f} 小时',
+                'status': status
+            })
+        
+        return jsonify(result if result else [])
+    except Exception as e:
+        print(f"获取已关闭账户列表失败: {e}")  # 添加日志以便调试
+        return jsonify([]), 500
+
 @app.get('/admin/pending-close-accounts')
 def admin_get_pending_close_accounts():
     """获取待审批的账户注销申请"""
@@ -1452,6 +2256,9 @@ def admin_get_pending_close_accounts():
         
         return jsonify(rows)
     except Exception as e:
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
         return jsonify({'ok': False, 'error': str(e)}), 400
 
 @app.post('/admin/approve-close-account')
@@ -1501,8 +2308,8 @@ def admin_approve_close_account():
             if not account:
                 raise Exception("账户不存在")
             
-            # 更新账户状态为CLOSED
-            cur.execute("UPDATE account SET type = 'closed' WHERE id = %s", (account_id,))
+            # 更新账户状态为CLOSED并记录关闭时间
+            cur.execute("UPDATE account SET type = 'closed', closed_at = NOW() WHERE id = %s", (account_id,))
             
             # 更新业务单状态
             cur.execute('''
@@ -1532,9 +2339,23 @@ def admin_approve_close_account():
         conn.rollback()
         cur.close()
         conn.close()
+        if is_db_error(e):
+            s, c, m = map_db_error(e)
+            return jsonify({'ok': False, 'error': m, 'code': c}), s
         return jsonify({'ok': False, 'error': str(e)}), 400
 
+def cleanup_scheduler():
+    """定期执行清理任务的调度器"""
+    while True:
+        # 每小时执行一次清理任务
+        time.sleep(3600)  # 1小时 = 3600秒
+        cleanup_expired_data()
+
 if __name__ == '__main__':
+    # 启动清理任务调度器线程
+    cleanup_thread = threading.Thread(target=cleanup_scheduler, daemon=True)
+    cleanup_thread.start()
+    
     use_waitress = os.getenv('USE_WAITRESS', '1') == '1'
     if use_waitress:
         try:
@@ -1544,3 +2365,33 @@ if __name__ == '__main__':
             app.run(host='127.0.0.1', port=5000, use_reloader=False)
     else:
         app.run(host='127.0.0.1', port=5000, use_reloader=False)
+
+def cleanup_expired_data():
+    """
+    清理过期数据
+    1. 删除超过24小时的已关闭账户
+    2. 删除超过30天的用户活动日志
+    """
+    try:
+        # 删除超过24小时的已关闭账户
+        execute("""
+            DELETE FROM account 
+            WHERE type = 'closed' 
+            AND closed_at < NOW() - INTERVAL '24 hours'
+        """)
+        
+        # 删除超过30天的用户活动日志
+        execute("""
+            DELETE FROM activity_log 
+            WHERE created_at < NOW() - INTERVAL '30 days'
+        """)
+        
+        # 删除超过30天的管理员活动日志
+        execute("""
+            DELETE FROM admin_activity_log 
+            WHERE created_at < NOW() - INTERVAL '30 days'
+        """)
+        
+        print(f"[{datetime.datetime.now()}] Cleaned up expired data")
+    except Exception as e:
+        print(f"[{datetime.datetime.now()}] Error cleaning up expired data: {e}")

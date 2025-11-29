@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>贷款查询</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <style>
     body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; background:#f5f7fa; margin:0 }
     .header { background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.1); padding:16px 24px; display:flex; justify-content:space-between; align-items:center }
@@ -56,13 +57,53 @@
     function showErr(msg){ const el = document.getElementById('err'); el.textContent=msg; el.style.display='block' }
     function render(data, isList){
       const t = document.getElementById('result')
-      const thead = '<tr><th class="highlight">贷款号</th><th>贷款金额</th><th>发放支行联行号</th><th>客户列表</th><th>已还款金额</th><th>剩余金额</th></tr>'
+      const thead = '<tr><th class="highlight">贷款号</th><th>贷款金额</th><th>发放支行联行号</th><th>客户列表</th><th>已还款金额</th><th>剩余金额</th><th>操作</th></tr>'
       const list = isList ? data : [data]
-      const rows = list.map(r => `<tr><td class="highlight">${r.loan_no||''}</td><td>${r.amount!=null?('¥'+Number(r.amount).toFixed(2)):''}</td><td>${r.branch_union_no||''}</td><td>${(r.customers||[]).join(', ')}</td><td>${r.paid_amount!=null?('¥'+Number(r.paid_amount).toFixed(2)):''}</td><td>${r.remaining_amount!=null?('¥'+Number(r.remaining_amount).toFixed(2)):''}</td></tr>`)
+      const rows = list.map(r => `<tr><td class="highlight">${r.loan_no||''}</td><td>${r.amount!=null?('¥'+Number(r.amount).toFixed(2)):''}</td><td>${r.branch_union_no||''}</td><td>${(r.customers||[]).join(', ')}</td><td>${r.paid_amount!=null?('¥'+Number(r.paid_amount).toFixed(2)):''}</td><td>${r.remaining_amount!=null?('¥'+Number(r.remaining_amount).toFixed(2)):''}</td><td><span class='delete-container' data-id='${r.id||''}' data-endpoint='/admin/loans/delete'></span></td></tr>`)
       t.querySelector('thead').innerHTML = thead
       t.querySelector('tbody').innerHTML = rows.join('')
       document.getElementById('err').style.display='none'
+      mountDeleteButtons('#result', '/admin/loans/delete')
     }
+    let csrfToken
+    async function getCsrf(){ const r = await fetch('/csrf-token'); const j = await r.json(); csrfToken = j.token }
+    function mountDeleteButtons(tableSelector, endpoint){
+      const containers = document.querySelectorAll(`${tableSelector} .delete-container`)
+      containers.forEach(el => {
+        const id = el.dataset.id
+        const app = Vue.createApp({
+          data(){ return { loading:false } },
+          methods:{
+            async onDelete(){
+              if(!id) return
+              if(!confirm('确认删除该记录？')) return
+              this.loading = true
+              try {
+                const sr = await fetch('/admin/sensitive/start', { method:'POST', headers:{ 'X-CSRF-Token': csrfToken } })
+                const sj = await sr.json()
+                if(!sr.ok) throw new Error(sj.error||'无法获取授权码')
+                const code = sj.code
+                const r = await fetch(endpoint, { method:'POST', headers:{ 'Content-Type':'application/json','X-CSRF-Token': csrfToken }, body: JSON.stringify({ id: parseInt(id), confirm: true, code }) })
+                const ct = (r.headers.get('content-type')||'')
+                let j = null
+                if (ct.includes('application/json')) j = await r.json()
+                else {
+                  const t = await r.text()
+                  if (!r.ok) throw new Error(t)
+                }
+                if(!r.ok) throw new Error((j && j.error) || '删除失败')
+                const tbody = document.querySelector(`${tableSelector} tbody`)
+                if (tbody) el.closest('tr').remove()
+              } catch(e){ alert(`删除失败: ${e.message||e}`) }
+              finally { this.loading=false }
+            }
+          },
+          template:`<button class='btn' :disabled='loading' @click='onDelete'>{{ loading?"删除中...":"删除" }}</button>`
+        })
+        app.mount(el)
+      })
+    }
+    document.addEventListener('DOMContentLoaded', getCsrf)
   </script>
 </body>
 </html>
